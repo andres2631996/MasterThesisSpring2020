@@ -1,0 +1,35 @@
+Information on data post-processing codes:
+
+
+"flowInformation.py" takes a folder with VTK masks or MAT files, reads all files and saves flow information
+on them in a specified folder as TXT files. Alternatively, it can also load the flow information previously
+saved in those TXT files to use it for later purposes.
+
+To run from terminal: folder_with_mask/MAT_file/TXT_file destination_folder (unused for loading)
+			folder_with_phase_images flag('save' or 'load') energy_to_save (only to load info from MAT files)
+
+Requires to have installed: NumPy, Scipy, VTK
+
+
+"flowStatistics.py" contains a collection of functions useful for a statistical analysis of flow results 
+coming from the neural network segmentations, comparing them to the reference values extracted from Segment software.
+Functions have to be executed in an external .py file. The functions contained are:
+
+- t_test: completes a T test. Inputs: result measures and reference measures. Outputs: t statistic and p value
+
+- wilcoxon_test: completes a Wilcoxon test. Inputs: result measures and reference measures. Outputs: sum of rank differences
+and p value
+
+- linear_regression_test: computes linear regression between resulting and reference measures. Inputs: result measures,
+reference measures, flag to plot results, flag to save plot as PNG, directory where to save plot as PNG (if save = True) and
+filename for PNG (if save == True). Outputs: linear regression coefficients, Mean Squared Error and R2 coefficient
+
+- bland_altman_plot: computes a Bland-Altman plot from the resulting and reference measures. Inputs: result measures, 
+reference_measures, flag to save results as PNG files, directory where to save plot as PNG (if save = True) and
+filename for PNG (if save == True)
+
+- figure_saving: function to save Matplotlib figures. Inputs: destination folder, filename (.png) and Matplotlib figure.
+If one wants to save a linear regression plot or a Bland-Altman plot, this function MUST be imported, too
+
+Requires to have installed: Scipy (for t test and Wilcoxon test), Matplotlib, Scikit-learn (for linear regression) and 
+			    Statsmodels (for Bland-Altman plot) 
