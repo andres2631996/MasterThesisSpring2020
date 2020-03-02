@@ -26,13 +26,6 @@ of the study and a folder where to save the images and it arranges the images as
 One must specify in the terminal: study path_to_find_images destination_path key_to_search_2DQFLOW
 Requires to have installed the following libraries: NumPy, VTK and Pydicom 
 
-"maskAlignment.py" takes as input a folder with raw files, a folder with cropped masks from previous measurements and a folder where to save 
-the resulting images. With these, it zero-pads the cropped images to the dimensions of the raw files, registers the masks to the raw files and
-refines the resukts from the registration. Final results are saved as VTK files in the specified folder.
-One must specify in the terminal: folder_with_raw_files folder_with_masks destination_folder number_iterations learning_rate allowForPatchRegistration
-				  patch_init_x patch_end_x patch_init_y patch_end_y
-Requires to have installed: NumPy, VTK and SimpleITK
-
 "timeInfoExtractor.py" extracts time information from DICOM files (non Siemens) and saves it in TXT files in a given location.
 Alternatively, it also allows for loading TXT files with previously saved information.
 If flag = 'save', the code additionally executes a linear regression analysis of the extracted heart rate and the computed heart rate from the 
