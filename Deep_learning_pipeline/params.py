@@ -47,6 +47,8 @@ train_with = 'mag' # Type of images to train with
 
 three_D = True # Train with separate 2D slices or 2D + time volumes
 
+channel_count = 1 # Channel counter
+
 
 # Augmentation parameters
 
@@ -54,7 +56,9 @@ augmentation = True
 
 augm_params = [0.15, 0.5, 30] # Augmentation limit parameters: maximum mean noise amplitude, maximum scale and maximum degree rotation
 
-augm_probs = [0.5]*6 # Probabilities for each augmentation event
+augm_probs = [0.5]*5 # Probabilities for each augmentation event
+
+
 
 
 # Cross-validation parameters
@@ -63,7 +67,23 @@ k = 4 # Number of cross validation folds
 
 rep = True # Repetition of minority studies in data presented to the network
 
+
+
+# Architecture parameters
+
 architecture = 'UNet_with_Residuals' # Architecture type
+
+normalization = 'instance' # Normalization type to apply in networks (None/batch/instance)
+
+dropout = 0.0 # Dropout rate to apply in networks
+
+layers = 4 # Number of architecture layers
+
+base = 64 # Basic number of features to extract in architecture
+
+kernel_size = 3 # Kernel size for convolutional architecture
+
+padding = 1 # Padding for architecture
 
 network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '/' # Folder where to save data related to Deep Learning architecture
 
@@ -95,11 +115,13 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 1000
+I = 200
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 
 class_weights = [0.2,0.8]
+
+class_count = 2 # Classes used: foreground and background
 
 lr = 0.0001 # Learning rate
 
@@ -108,6 +130,8 @@ lr_scheduling = False # Can be step or exponential
 step = I/10 # Step for LR scheduling
 
 lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
+
+
 
 
 
@@ -135,4 +159,4 @@ metrics = ["Dice", "Precision", "Recall"]
 
 batch_GPU = min(batch_size, batch_GPU_max)
 
-
+checkpoint_loading = False # Tells if we are training from some checkpoint

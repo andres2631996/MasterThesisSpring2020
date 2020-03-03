@@ -57,11 +57,13 @@ class QFlowDataset(data.Dataset):
     # img_paths is list of paths with images
 
 
-    def __init__(self, img_paths, train, work_with, threeD, augmentation):
+    def __init__(self, img_paths, train, test, work_with, threeD, augmentation):
 
         self.img_paths = img_paths
         
         self.train = train
+        
+        self.test = test
         
         self.threeD = threeD
         
@@ -148,16 +150,18 @@ class QFlowDataset(data.Dataset):
         patient_files = sorted(os.listdir(img_path))
         
         raw_arrays = []
-        
-        mask_arrays = []
-        
+
         raw_names = []
-        
-        mask_names = []
+
+        if not(self.test):
+            
+            mask_arrays = []
+            
+            mask_names = []
         
         if len(patient_files) == 0:
             
-            print('Empty folder. Please specify an adequate folder')
+            print('Empty folder. Please specify an adequate folder\n')
         
         else:
             
@@ -238,49 +242,55 @@ class QFlowDataset(data.Dataset):
             
         # Extract list with mask arrays
         
-        ind_mask_files = [i for i, s in enumerate(patient_files) if 'msk' in s]
-       
-        cont = 0
+        if not(self.test):
         
-        for ind_mask in ind_mask_files:
+            ind_mask_files = [i for i, s in enumerate(patient_files) if 'msk' in s]
+           
+            cont = 0
             
-            # Check that raw files and masks coincide in position in the dataset
-            
-            flag = 'continue'
-            
-            if 'both' in self.work_with:
+            for ind_mask in ind_mask_files:
                 
-                test_raw_name = patient_files[ind_mask].replace('msk', 'pha')
-       
-                if test_raw_name != patient_files[ind_pha_files[cont]]:
-                    
-                    flag = 'stop'
-                    
-                    print('Raw and mask files do not correspond')
-            
-            else:
+                # Check that raw files and masks coincide in position in the dataset
                 
-                test_raw_name = patient_files[ind_mask].replace('msk', self.work_with)
-         
-                if test_raw_name != patient_files[ind_raw_files[cont]]:
+                flag = 'continue'
+                
+                if 'both' in self.work_with:
                     
-                    flag = 'stop'
-                    
-                    print('Raw and mask files do not correspond')
-            
-            
-            if flag != 'stop':
-            
-                mask_array, _, _ = self.readVTK(img_path, patient_files[ind_mask])
-
-                mask_names.append(patient_files[ind_mask])
+                    test_raw_name = patient_files[ind_mask].replace('msk', 'pha')
+           
+                    if test_raw_name != patient_files[ind_pha_files[cont]]:
                         
-                mask_arrays.append(mask_array)
+                        flag = 'stop'
+                        
+                        print('Raw and mask files do not correspond')
+                
+                else:
+                    
+                    test_raw_name = patient_files[ind_mask].replace('msk', self.work_with)
+             
+                    if test_raw_name != patient_files[ind_raw_files[cont]]:
+                        
+                        flag = 'stop'
+                        
+                        print('Raw and mask files do not correspond')
+                
+                
+                if flag != 'stop':
+                
+                    mask_array, _, _ = self.readVTK(img_path, patient_files[ind_mask])
+    
+                    mask_names.append(patient_files[ind_mask])
+                            
+                    mask_arrays.append(mask_array)
             
-            cont += 1
-
+                cont += 1
         
-        return raw_arrays, mask_arrays, raw_names, mask_names
+            return raw_arrays, mask_arrays, raw_names, mask_names
+        
+        
+        else:
+            
+            return raw_arrays, raw_names
 
     
       
@@ -296,19 +306,24 @@ class QFlowDataset(data.Dataset):
         
         img_path = self.img_paths[index]
         
-        raw_arrays, mask_arrays, raw_names, mask_names = self.extractArrays(img_path)
+        if not(self.test):
+        
+            raw_arrays, mask_arrays, raw_names, mask_names = self.extractArrays(img_path)
+            
+            seg = np.asarray(mask_arrays)
+        
+        else:
+        
+            raw_arrays, raw_names = self.extractArrays(img_path)
         
         img = np.asarray(raw_arrays)
         
-        seg = np.asarray(mask_arrays)
     
         if self.train and self.augmentation:
             
             augm = Augmentation(img, seg, params.augm_params, params.augm_probs, self.work_with)
             
             img, seg = augm.__main__()
-            
-            print(img.shape, seg.shape)
 
             
         if not(self.threeD):
@@ -321,16 +336,23 @@ class QFlowDataset(data.Dataset):
             
                 img = img.reshape(img.shape[0]*img.shape[3], img.shape[1], img.shape[2])
             
-            seg = seg.reshape(seg.shape[0]*seg.shape[3], seg.shape[1], seg.shape[2])
+            if not(self.test):
+            
+                seg = seg.reshape(seg.shape[0]*seg.shape[3], seg.shape[1], seg.shape[2])
 
 
         # Transform list of raw files and mask files into tensor
         
         X = Variable(torch.from_numpy(np.flip(img,axis=0).copy())).float()
-
-        Y = Variable(torch.from_numpy(np.flip(seg,axis=0).copy())).long()   
         
-    
-        return X,Y, mask_names
+        if not(self.test):
+
+            Y = Variable(torch.from_numpy(np.flip(seg,axis=0).copy())).long()   
+
+            return X,Y, mask_names
+        
+        else:
+            
+            return X, raw_names
         
         

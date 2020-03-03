@@ -71,8 +71,6 @@ class Augmentation:
         
         r_sc = random.uniform(0,1)
         
-        r_trans = random.uniform(0,1)
-        
         r_rot = random.uniform(0,1)
         
         r_flip = random.uniform(0,1)
@@ -101,23 +99,11 @@ class Augmentation:
     
             scale = 1
         
-        # Translation randomization
-        
-        if r_trans < self.probs[2]:
-    
-            tx = random.uniform(- (self.img.shape[0])/4, (self.img.shape[0])/4)
-            
-            ty = random.uniform(- (self.img.shape[1])/4, (self.img.shape[1])/4)
-        
-        
-        else:
-            
-            tx = ty = 0
             
         
         # Rotation randomization
         
-        if r_rot < self.probs[3]:
+        if r_rot < self.probs[2]:
             
             angle = random.uniform(-self.limit_params[2], self.limit_params[2])*np.pi/180
     
@@ -128,7 +114,7 @@ class Augmentation:
         
         # Flipping randomization
         
-        if r_flip < self.probs[4]:
+        if r_flip < self.probs[3]:
             
             flip = np.random.randint(1,3)
         
@@ -139,7 +125,7 @@ class Augmentation:
         
         # Temporal flipping randomization
         
-        if r_flip_temp < self.probs[5]:
+        if r_flip_temp < self.probs[4]:
             
             flip_temp = 1
         
@@ -148,7 +134,7 @@ class Augmentation:
             flip_temp = 0
     
     
-        out_params = [amp, scale, tx, ty, angle, flip, flip_temp]
+        out_params = [amp, scale, angle, flip, flip_temp]
         
         return out_params
 
@@ -193,14 +179,14 @@ class Augmentation:
         
         out_params = self.parameterRandomization()
         
-        transform = np.array([[out_params[1]*np.cos(out_params[4]),-out_params[1]*np.sin(out_params[4])],
-                             [out_params[1]*np.sin(out_params[4]),out_params[1]*np.cos(out_params[4])]])
+        transform = np.array([[out_params[1]*np.cos(out_params[2]),-out_params[1]*np.sin(out_params[2])],
+                             [out_params[1]*np.sin(out_params[2]),out_params[1]*np.cos(out_params[2])]])
         
         c_in = 0.5*np.array((self.img.shape[1], self.img.shape[2]))
         
         c_out = np.array((self.img.shape[1]/2, self.img.shape[2]/2))
         
-        offset = c_in-c_out.dot(transform) - [out_params[2], out_params[3]]
+        offset = c_in-c_out.dot(transform)
         
         for k in range(inp.shape[0]):
     

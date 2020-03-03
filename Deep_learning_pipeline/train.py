@@ -32,12 +32,10 @@ import utilities
 
 import params
 
-import gc
-
 import matplotlib.pyplot as plt
 
 
-def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.eval_frequency, I = params.I, prev_dice = 0):
+def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.eval_frequency, I = params.I):
     
     
     '''
@@ -49,9 +47,17 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     :param (optional) loader_val: validation dataloader, Default=None
     
-    :param (optional) k: current iteration in K-fold crossvalidation, Default=0 
+    :param (optional) k: current iteration in K-fold crossvalidation, Default=0
     
-    :returns: list(iteration) of dicts(metric) of dicts(patient) containing evaluation results
+    :returns: final_results_train: list with final result for training
+    
+    :returns: final_results_eval: list with final result for validation
+    
+    :returns: model: trained model state (if one wants to save it for later)
+    
+    :returns: optimizer: applied optimizer (if one wants to save it for later)
+    
+    :returns: optimizer_state: trained optimizer state (if one wants to save it for later)
     
     '''
     #Fetches parameters from params
@@ -61,10 +67,10 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     batch_GPU = params.batch_GPU
     
     class_weights = torch.tensor(params.class_weights, dtype=torch.float32)
-    
-    class_count = len(params.class_weights)
 
     net.train(True) # Must be enabled for dropout to be active
+    
+    prev_dice = 0
     
 
     # Possible optimizers. Betas should not have to be changed
@@ -107,6 +113,9 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     eval_metrics = [] # Stores dict of eval metrics from every [eval_frequency] step
     
     train_metrics = [] # Stores dict of train metrics from every [eval_frequency] step
+    
+    it = [] # Stores iteration indexes when network is evaluated
+
     
     i = 0
     
@@ -241,31 +250,46 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                 
                 if eval_frequency != -1 and loader_val != None and i % eval_frequency in range(batch_size) and i not in range(batch_size):
 
-                    print("Training iteration {}: loss: {}".format(i, losses[-1]))
+                    #Evaluate a series of metrics at this point in training
                     
-                    print("Elapsed training time: {}".format(time.time() - start_time))
-
-                    #Evaluate a dice score at this point in training
+                    results_eval = evaluate.evaluate(net, loader_val, i)
+                    
+                    results_train = evaluate.evaluate(net, loader_train, i)
                 
-                    eval_metrics.append(evaluate.evaluateCrossvalidation(net, loader_val, class_count, params.metrics))
+                    eval_metrics.append(results_eval)
                     
-                    train_metrics.append(evaluate.evaluateCrossvalidation(net, loader_train, class_count, params.metrics))
+                    train_metrics.append(results_train)
+                    
+                    it.append(i)
                     
                     net.train(True)
                     
+                    new_dice = results_eval[0][1]
+                    
                     # Save the model if the validation score increases with respect to previous iterations
                     
-                    if evaluate.evaluateCrossvalidation(net, loader_val, class_count, params.metrics) > prev_dice:
+                    if new_dice > prev_dice:
                     
                         state = {'iteration': i + 1, 'state_dict': net.state_dict(),
-                                 'optimizer': optimizer.state_dict(), 'loss': loss}
+                                 'optimizer': optimizer.state_dict(), 'loss': loss, 
+                                 'best_dice': new_dice}
                     
-                        filename = params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + '.tar' 
+                        filename = params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(params.k) + '.tar' 
                     
                         torch.save(state, filename)
+                        
+                        prev_dice = new_dice
+                    
+                    print("Training iteration {}: loss: {}\n".format(i, losses[-1]))
+                    
+                    for i in range(len(results_eval)):
+                        
+                        print("Training {}: {} +- {} / Validation {}: {} +- {}\n".
+                              format(results_train[i][0], results_train[i][1], results_train[i][2], 
+                                     results_eval[i][0], results_eval[i][1], results_eval[i][2]))
 
-                
-                prev_dice = evaluate.evaluateCrossvalidation(net, loader_val, class_count, params.metrics) # Look for some index!!!
+                    print("Elapsed training time: {}\n".format(time.time() - start_time))
+      
 
 
             alive = listenPaus.poll()
@@ -317,11 +341,23 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     if loader_val != None:
         
-        evaluate.evaluate_final(net, loader_val, class_count, params.final_metrics, params.data_path)
+        final_results_eval = evaluate.evaluate(net, loader_val, I)
+    
+    final_results_train = evaluate.evaluate(net, loader_train, I)
 
     listenPaus.kill()
 
     end_time = time.time()
+    
+    print('Final loss: {}\n'.format(losses[-1]))
+    
+    for i in range(len(final_results_eval)):
+                        
+        print("Final Training {}: {} +- {} / Final Validation {}: {} +- {}\n".
+              format(final_results_train[i][0], final_results_train[i][1], 
+                     final_results_train[i][2], final_results_eval[i][0], 
+                     final_results_eval[i][1], final_results_eval[i][2]))
+
     
     print("Elapsed training time: {}".format(end_time - start_time))
     
@@ -345,67 +381,64 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     plt.figure(figsize = (13,5))
     
-    plt.plot(range(1,len(loss)),loss), plt.xlabel('Iterations'), plt.ylabel('Loss values')
+    plt.plot(range(1,len(losses)),losses), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
     
-    plt.title('Evolution of loss function')
+    plt.title('Evolution of ' + params.loss_fun + ' loss function')
     
     plt.savefig(params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_loss.png')
     
     # Metrics
     
-    dice_train = train_metrics[0]
+    # Set metric lists to array
     
-    precision_train = train_metrics[1]
+    train_metrics_array = np.array(train_metrics)
     
-    recall_train = train_metrics[2]
+    eval_metrics_array = np.array(eval_metrics)
+
     
-    dice_eval = eval_metrics[0]
+    # Save evaluation and training metrics to TXT files
     
-    precision_eval = eval_metrics[1]
+    np.savetxt(params.network_data_path + 'ValidationMetrics_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '.txt', eval_metrics_array, fmt = '%s')
     
-    recall_eval = eval_metrics[2]
+    np.savetxt(params.network_data_path + 'TrainingMetrics_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '.txt', eval_metrics_array, fmt = '%s')
     
+    # Get unique metrics names
     
-    plt.figure(figsize = (13,5))
+    metrics_unique = np.unique(train_metrics_array[:,0])
     
-    plt.plot(range(1,len(dice_train)*params.eval_frequency,eval_frequency),dice_train, 'b', label = 'Training')
+    # Apply a for loop for each metric type
     
-    plt.plot(range(1,len(dice_eval)*params.eval_frequency,eval_frequency),dice_eval, 'r', label = 'Validation')
-    
-    plt.xlabel('Iterations'), plt.ylabel('Dice coefficient')
-    
-    plt.title('Evolution of Dice coefficient')
-    
-    plt.savefig(params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_dice.png')
-    
-    
-    
-    plt.figure(figsize = (13,5))
-    
-    plt.plot(range(1,len(precision_train)*params.eval_frequency,eval_frequency),precision_train, 'b', label = 'Training')
-    
-    plt.plot(range(1,len(precision_eval)*params.eval_frequency,eval_frequency),precision_eval, 'r', label = 'Validation')
-    
-    plt.xlabel('Iterations'), plt.ylabel('Precision')
-    
-    plt.title('Evolution of precision')
-    
-    plt.savefig(params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_precision.png')
-    
-    
-    
-    plt.figure(figsize = (13,5))
-    
-    plt.plot(range(1,len(recall_train)*params.eval_frequency,eval_frequency),recall_train, 'b', label = 'Training')
-    
-    plt.plot(range(1,len(recall_eval)*params.eval_frequency,eval_frequency),recall_eval, 'r', label = 'Validation')
-    
-    plt.xlabel('Iterations'), plt.ylabel('Recall')
-    
-    plt.title('Evolution of recall')
-    
-    plt.savefig(params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_recall.png')
+    for metric_name in metrics_unique:
+        
+        metric_name = str(metric_name)
+        
+        ind_metric = np.where(train_metrics_array[:,0] == metric_name)[0]
+
+        mean_metric_train = train_metrics_array[ind_metric,1]
+        
+        mean_metric_eval = eval_metrics_array[ind_metric,1]
+        
+        std_metric_train = train_metrics_array[ind_metric,2]
+        
+        std_metric_eval = eval_metrics_array[ind_metric,2]
+
+
+        fig = plt.figure(figsize = (13,5))
+        
+        plt.errorbar(it, mean_metric_train, yerr =  std_metric_train, color ='b', label = 'Training')
+        
+        plt.errorbar(it, mean_metric_eval, yerr =  std_metric_eval, color = 'r', label = 'Validation')
+        
+        plt.xlabel('Iterations'), plt.ylabel(metric_name)
+        
+        plt.title('Evolution of ' + metric_name)
+        
+        plt.legend()
+        
+        fig.savefig(params.network_data_path + '/' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_' + metric_name + '.png')
     
     
-    return eval_metrics
+    
+    
+    return losses[-1], final_results_train, final_results_eval, net.state_dict(), optimizer, optimizer.state_dict()
 
