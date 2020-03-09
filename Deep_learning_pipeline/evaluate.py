@@ -26,6 +26,8 @@ import time
 
 import math
 
+import matplotlib.pyplot as plt
+
 
 class Dice():
     
@@ -101,7 +103,7 @@ class Precision():
         
         denominator += float(torch.sum(self.prediction).cpu())
         
-        return numerator/denominator
+        return numerator/(denominator + 0.000000001)
     
     
 
@@ -140,7 +142,7 @@ class Recall():
         
         denominator += float(torch.sum(self.ground_truth).cpu())
         
-        return numerator/denominator
+        return numerator/(denominator + 0.000000001)
         
 
 
@@ -329,27 +331,14 @@ def evaluate(net, loader, iteration):
                 stopYIndex = min((i+1)*batch_gpu_max, Y.shape[0])
                 
                 if params.three_D: # Training in 2D with one channel
-                        
-                    if 'both' in params.train_with:
-                
-                        x_part = X[startIndiex:stopXIndex,:,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
+    
+                    x_part = X[startIndiex:stopXIndex,:,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
 
-                    
-                    else:
-                        
-                        x_part = X[startIndiex:stopXIndex,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
-                
                     y_part = Y[startIndiex:stopYIndex,:,:,:].cuda()
                 
                 else:
-                    
-                    if 'both' in params.train_with:
-                        
-                        x_part = X[startIndiex:stopXIndex,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
-                    
-                    else:
-                        
-                        x_part = X[startIndiex:stopXIndex,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
+
+                    x_part = X[startIndiex:stopXIndex,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
                     
                     y_part = Y[startIndiex:stopYIndex,:,:].cuda()
                 
@@ -387,6 +376,7 @@ def evaluate(net, loader, iteration):
                             print('Unspecified metric. Please provide an adequate metric (Dice/Precision/Recall)\n')
                             
                             exit()
+                        
                             
         if ('Dice' in metrics) or ('dice' in metrics) or ('DICE' in metrics):
             
@@ -396,11 +386,11 @@ def evaluate(net, loader, iteration):
             
             name = 'dice'
             
-            results.append([name, mean_dice, std_dice, iteration])
+            results.append([name, str(mean_dice) + ' ', str(std_dice) + ' ', iteration])
             
         
         
-        elif ('Precision' in metrics) or ('precision' in metrics) or ('PRECISION' in metrics):
+        if ('Precision' in metrics) or ('precision' in metrics) or ('PRECISION' in metrics):
             
             mean_prec = np.mean(np.array(precisions))
             
@@ -408,10 +398,10 @@ def evaluate(net, loader, iteration):
             
             name = 'precision'
             
-            results.append([name, mean_prec, std_prec, iteration])
+            results.append([name, str(mean_prec) + ' ', str(std_prec) + ' ', iteration])
             
         
-        elif ('Recall' in metrics) or ('recall' in metrics) or ('RECALL' in metrics):
+        if ('Recall' in metrics) or ('recall' in metrics) or ('RECALL' in metrics):
             
             mean_rec = np.mean(np.array(recalls))
             
@@ -419,7 +409,7 @@ def evaluate(net, loader, iteration):
             
             name = 'recall'
             
-            results.append([name, mean_rec, std_rec, iteration])
+            results.append([name, str(mean_rec) + ' ', str(std_rec) + ' ', iteration])
         
         
     return results

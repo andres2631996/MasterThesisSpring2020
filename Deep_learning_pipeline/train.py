@@ -34,6 +34,9 @@ import params
 
 import matplotlib.pyplot as plt
 
+import itertools
+
+
 
 def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.eval_frequency, I = params.I):
     
@@ -72,7 +75,9 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     prev_dice = 0
     
-
+    
+    cont_load = 0 # Flag to load previous models
+    
     # Possible optimizers. Betas should not have to be changed
     
     if params.opt == 'Adam':
@@ -119,13 +124,13 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     i = 0
     
-    listenPaus = subprocess.Popen(["python3", "./listenPaus.py"])
+    #listenPaus = subprocess.Popen(["python3", "./listenPaus.py"])
     
     while i < I:
         
         #Loads a batch of samples into RAM
         
-        for X, Y, _ in loader_train:
+        for X, Y, name in loader_train:
             
             if i >= I:
                 
@@ -158,28 +163,17 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                     stopIndex = j*batch_size + min((m+1)*batch_GPU,batch_size)
                     
                     if params.three_D: # Training in 2D with one channel
-                        
-                        if 'both' in params.train_with:
-                    
-                            Xpart = X[startIndiex:stopIndex,:,:,:,:]
 
                         
-                        else:
-                            
-                            Xpart = X[startIndiex:stopIndex,:,:,:]
-                    
-                        Ypart = Y[startIndiex:stopIndex,:,:,:]
+                        Xpart = X[startIndiex:stopIndex,:,:,:,:]
+                
+                        Ypart = Y[startIndiex:stopIndex,:,:]
                     
                     else:
-                        
-                        if 'both' in params.train_with:
+
                             
-                            Xpart = X[startIndiex:stopIndex,:,:,:]
-                        
-                        else:
-                            
-                            Xpart = X[startIndiex:stopIndex,:,:]
-                        
+                        Xpart = X[startIndiex:stopIndex,:,:,:]
+                    
                         Ypart = Y[startIndiex:stopIndex,:,:]
                         
                             
@@ -225,6 +219,10 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                         
                         print('\nWrong loss. Please define a valid loss function (dice/generalized_dice/bce/dice_bce/exp_log/focal/tversky/focal_tversky)\n')
                         
+                    
+
+                    
+                    
                     losses.append(loss.item())
 
                     #Calculate gradients
@@ -249,8 +247,23 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
 
                 
                 if eval_frequency != -1 and loader_val != None and i % eval_frequency in range(batch_size) and i not in range(batch_size):
-
+                    
                     #Evaluate a series of metrics at this point in training
+                    
+#                    plt.figure(figsize = (13,5))
+#                    
+#                    plt.subplot(131)
+#                    
+#                    plt.imshow(Xpart.cpu().detach().numpy()[0,0,:,:], cmap = 'gray')
+#                    
+#                    plt.subplot(132)
+#                    
+#                    plt.imshow(Ypart.cpu().numpy()[0,:,:], cmap = 'gray')
+#                    
+#                    plt.subplot(133)
+                    
+                    out = torch.argmax(output, 1)
+                    
                     
                     results_eval = evaluate.evaluate(net, loader_val, i)
                     
@@ -264,7 +277,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                     
                     net.train(True)
                     
-                    new_dice = results_eval[0][1]
+                    new_dice = float(results_eval[0][1][:-1])
                     
                     # Save the model if the validation score increases with respect to previous iterations
                     
@@ -274,68 +287,92 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                                  'optimizer': optimizer.state_dict(), 'loss': loss, 
                                  'best_dice': new_dice}
                     
-                        filename = params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(params.k) + '.tar' 
-                    
-                        torch.save(state, filename)
+                        filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
                         
-                        prev_dice = new_dice
+                        files_saved = os.listdir(params.network_data_path)
+                        
+                        if filename in files_saved and cont_load != 1: # Model has been already run with the same parameters
+                            
+                            # Load previous model
+                            
+                            net, optimizer, start_epoch, loss, best_dice = utilities.load_checkpoint(net, optimizer, 
+                                                                                                       params.network_data_path,
+                                                                                                       filename)
+
+                                
+                            prev_dice = best_dice
+                            
+                            cont_load = 1
+                        
+                        else:
+                            
+                            print('Saved model')
+                            
+                            torch.save(state, params.network_data_path + filename)
+                        
+                            prev_dice = new_dice
                     
                     print("Training iteration {}: loss: {}\n".format(i, losses[-1]))
                     
-                    for i in range(len(results_eval)):
+                    for l in range(len(results_eval)):
                         
                         print("Training {}: {} +- {} / Validation {}: {} +- {}\n".
-                              format(results_train[i][0], results_train[i][1], results_train[i][2], 
-                                     results_eval[i][0], results_eval[i][1], results_eval[i][2]))
+                              format(results_train[l][0], results_train[l][1], results_train[l][2], 
+                                     results_eval[l][0], results_eval[l][1], results_eval[l][2]))
 
                     print("Elapsed training time: {}\n".format(time.time() - start_time))
       
 
 
-            alive = listenPaus.poll()
-            
-            if alive == 0:
-                
-                del X
-                
-                del Y
-                
-                net.cpu()
-                
-                utilities.clear_GPU()
-                
-                print("Paused, press ENTER to resume or a number + ENTER to sleep that many seconds before resuming")
-                
-                while True:
+#            alive = listenPaus.poll()
+#            
+#            if alive == 0:
+#                
+#                del X
+#                
+#                del Y
+#                
+#                net.cpu()
+#                
+#                utilities.clear_GPU()
+#                
+#                print("Paused, press ENTER to resume or a number + ENTER to sleep that many seconds before resuming")
+#                
+#                while True:
+#                    
+#                    keystroke = input()
+#                    
+#                    if keystroke == "":
+#                        
+#                        break
+#                    
+#                    else:
+#                        
+#                        try:
+#                            
+#                            seconds = int(keystroke)
+#                            
+#                            print("Sleeping for " + keystroke + " seconds")
+#                            
+#                            time.sleep(seconds)
+#                            
+#                            break
+#                        
+#                        except ValueError:
+#                            
+#                            print("Press ENTER to resume or a number + ENTER to sleep that many seconds before resuming")
+#                            
+#                    print("Resuming")
                     
-                    keystroke = input()
-                    
-                    if keystroke == "":
-                        
-                        break
-                    
-                    else:
-                        
-                        try:
-                            
-                            seconds = int(keystroke)
-                            
-                            print("Sleeping for " + keystroke + " seconds")
-                            
-                            time.sleep(seconds)
-                            
-                            break
-                        
-                        except ValueError:
-                            
-                            print("Press ENTER to resume or a number + ENTER to sleep that many seconds before resuming")
-                            
-                    print("Resuming")
-                    
-                listenPaus = subprocess.Popen(["python3", "./listenPaus.py"])
+                #listenPaus = subprocess.Popen(["python3", "./listenPaus.py"])
                 
-                net.cuda()
+                #net.cuda()
 
+    # Remove one dimension from lists of results
+
+    eval_metrics = list(itertools.chain.from_iterable(eval_metrics))
+    
+    train_metrics = list(itertools.chain.from_iterable(train_metrics))
 
     #Final evaluation for creating MIPs etc
     
@@ -345,7 +382,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     final_results_train = evaluate.evaluate(net, loader_train, I)
 
-    listenPaus.kill()
+    #listenPaus.kill()
 
     end_time = time.time()
     
@@ -364,7 +401,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     # Saves training losses as a file
     
 
-    with open(params.data_path + 'Training_losses_fold_' + str(k) + '_' + str(I) + 'trainedWith' + params.train_with + '_' + params.prep_step, 'w') as file:
+    with open(params.network_data_path + 'Training_losses_fold_' + str(k) + '_' + str(I) + 'trainedWith' + params.train_with + '_' + params.prep_step, 'w') as file:
         
         for i in range(len(losses)):
             
@@ -381,9 +418,9 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     plt.figure(figsize = (13,5))
     
-    plt.plot(range(1,len(losses)),losses), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
+    plt.plot(range(1,len(losses) + 1),losses), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
     
-    plt.title('Evolution of ' + params.loss_fun + ' loss function')
+    plt.title('Evolution of ' + params.loss_fun + ' loss function, fold' + str(k))
     
     plt.savefig(params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_loss.png')
     
@@ -394,6 +431,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     train_metrics_array = np.array(train_metrics)
     
     eval_metrics_array = np.array(eval_metrics)
+
 
     
     # Save evaluation and training metrics to TXT files
@@ -421,17 +459,39 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
         std_metric_train = train_metrics_array[ind_metric,2]
         
         std_metric_eval = eval_metrics_array[ind_metric,2]
-
+        
+        
+        m_metric_train = []
+        
+        s_metric_train = []
+        
+        m_metric_eval = []
+        
+        s_metric_eval = []
+        
+        for i in range(len(mean_metric_train)):
+            
+            m_metric_train.append(float(mean_metric_train[i][:-1]))
+            
+            s_metric_train.append(float(std_metric_train[i][:-1]))
+            
+            m_metric_eval.append(float(mean_metric_eval[i][:-1]))
+            
+            s_metric_eval.append(float(std_metric_eval[i][:-1]))
+        
+        
 
         fig = plt.figure(figsize = (13,5))
         
-        plt.errorbar(it, mean_metric_train, yerr =  std_metric_train, color ='b', label = 'Training')
+
         
-        plt.errorbar(it, mean_metric_eval, yerr =  std_metric_eval, color = 'r', label = 'Validation')
+        plt.errorbar(it, m_metric_train, yerr =  s_metric_train, color ='b', label = 'Training')
+        
+        plt.errorbar(it, m_metric_eval, yerr =  s_metric_eval, color = 'r', label = 'Validation')
         
         plt.xlabel('Iterations'), plt.ylabel(metric_name)
         
-        plt.title('Evolution of ' + metric_name)
+        plt.title('Evolution of ' + metric_name + ' fold ' + str(k))
         
         plt.legend()
         

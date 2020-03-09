@@ -11,7 +11,51 @@ import numpy as np
 
 import random
 
+import matplotlib.pyplot as plt
 
+from torchvision import transforms
+
+import torchvision.transforms.functional as TF
+
+from PIL import Image
+
+
+class RRC(transforms.RandomAffine):
+    
+    def __call__(self, img, mask):
+        
+        """
+        Args:
+            img: 3D array
+
+        Returns:
+            PIL Image: Randomly cropped and resized image.
+            
+        """
+        
+        im = Image.fromarray(img[:,:,img.shape[-1]//2])
+        
+        i, j, h, w = self.get_params(im, self.scale, self.ratio)
+        
+        img_final = np.zeros(img.shape)
+        
+        mask_final = np.zeros(mask.shape)
+
+        for i in range(img.shape[-1]):
+            
+            im = Image.fromarray(img[:,:,i])
+
+            trans_im = transforms.RandomAffine(img[:,:,i], i, j, h, w, self.size, self.interpolation)
+            
+            trans_mask = transforms.RandomAffine(mask[:,:,i], i, j, h, w, self.size, self.interpolation)
+            
+            img_final[:,:,i] = np.array(trans_im)
+            
+            mask_final[:,:,i] = np.array(trans_mask)
+
+        return img_final, mask_final
+    
+    
 
 class Augmentation:
     
@@ -191,20 +235,7 @@ class Augmentation:
         for k in range(inp.shape[0]):
     
             for j in range(inp.shape[-1]):
-                
-                if j == 0 and not('pha' in self.work_with):
-                
-                    # Noise addition
-                    
-                    std = abs(out_params[0]*np.mean(inp[k,:,:,:,j].flatten()))
-                    
-                    #std = 0
-            
-                    noise = np.random.normal(scale = std, size = inp[k,:,:,:,j].shape)
-                        
-                    inp[k,:,:,:,j] += noise
 
-                
                 # Affine transformations
             
                 for i in range(inp.shape[3]):
@@ -215,7 +246,7 @@ class Augmentation:
                         inp[k,:,:,i,j],transform.T,order = 0, offset = offset, 
                         output_shape=(self.img.shape[1],self.img.shape[2]),
                         cval=0.0,output=np.float32)
-                    
+    
                     
         if out_params[-2] > 0: # Flipping
 
@@ -225,14 +256,13 @@ class Augmentation:
         
             elif out_params[-2] == 2: # Horizontal flipping
                 
-                trans = np.flip(trans, axis = 1)
-                    
+                trans = np.flip(trans, axis = 1)             
                     
         # Temporal flipping
                         
         if out_params[-1] == 1:
             
-            trans = np.flip(trans, axis = 3)
+            trans = np.flip(trans, axis = 3) 
         
         # Separate image and mask and squeeze them
         
@@ -246,6 +276,7 @@ class Augmentation:
             
             
         return final_img, final_seg
+
 
     
 

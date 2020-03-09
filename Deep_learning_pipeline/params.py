@@ -43,9 +43,9 @@ studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
 prep_step = 'raw' # Level of preprocessing to apply for images to the network
 
-train_with = 'mag' # Type of images to train with
+train_with = 'mag_' # Type of images to train with
 
-three_D = True # Train with separate 2D slices or 2D + time volumes
+three_D = False # Train with separate 2D slices or 2D + time volumes
 
 channel_count = 1 # Channel counter
 
@@ -58,8 +58,11 @@ augm_params = [0.15, 0.5, 30] # Augmentation limit parameters: maximum mean nois
 
 augm_probs = [0.5]*5 # Probabilities for each augmentation event
 
+# Optional 2D augmentation with albumentations
 
+augm2D_limits = [0.5, 45] # Augmentation limit parameters: contrast, Brightness, Scale, Rotation, Flip, Elastic Deformation
 
+augm2D_probs = [0.5]*3
 
 # Cross-validation parameters
 
@@ -115,7 +118,12 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 200
+I = 10000
+
+# How often the model will be evaluated
+# During testing (K=1) this is only used to show how far the network has come
+    
+eval_frequency = batch_size*100
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 
@@ -147,10 +155,7 @@ loss_gamma_exp_log = 0.3
 
 loss_weights = [1,1]
 
-# How often the model will be evaluated
-# During testing (K=1) this is only used to show how far the network has come
-    
-eval_frequency = 20
+
 
 metrics = ["Dice", "Precision", "Recall"]
 

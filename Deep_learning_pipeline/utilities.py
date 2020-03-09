@@ -11,6 +11,8 @@ import torch
 
 import torch.nn.functional as F
 
+import torch.nn as nn
+
 import os
 
 import params
@@ -20,6 +22,8 @@ import numpy as np
 from torch.nn import BCELoss
 
 import matplotlib.pyplot as plt
+
+from torch.autograd import Variable
 
 
 def dice_loss(output, target, weights = params.loss_weights):
@@ -54,7 +58,7 @@ def dice_loss(output, target, weights = params.loss_weights):
     return 1 - dice_loss
 
 
-def BCEloss(output, target):
+def BCEloss(output, target, balance = 1.1):
     
     """
     Computes Binary Cross-Entropy loss.
@@ -70,8 +74,14 @@ def BCEloss(output, target):
         - Binary Cross-Entropy loss
     
     """
-    
-    return BCELoss(params.loss_weights)
+
+    output_softmax = nn.Softmax(output)
+
+    loss = BCELoss()(output_softmax, target) # initialize loss function
+
+    return loss 
+
+
 
 
 def DiceBCEloss(output, target):
@@ -117,17 +127,19 @@ def generalized_dice_loss(output, target):
 
     # Compute weights: "the contribution of each label is corrected by the inverse of its volume"
     
-    Ncl = output.shape[-1]
+    Ncl = output.shape[1]
     
     w = np.zeros((Ncl,))
     
     target_array = target.numpy()
     
-    for l in range(0,Ncl): w[l] = np.sum(target_array[:,:,:,:,l]==1,np.int8)
+    weight = np.sum(target_array==1,np.int8)/np.prod(np.array(target.shape))
+    
+    w = [1-weight, weight]
     
     w = 1/(w**2+0.00001)
 
-    dice = dice_loss(output, target, weights = [w, w])
+    dice = dice_loss(output, target, weights = w)
     
     return dice
 
@@ -221,13 +233,13 @@ def tversky_loss_scalar(output, target):
         
     """
     
-    output = F.log_softmax(output, dim=1)[:,1]
+    output = F.log_softmax(output, dim=1)[:,0]
     
     numerator = torch.sum(target * output)
     
     denominator = target * output + params.loss_beta * (1 - target) * output + (1 - params.loss_beta) * target * (1 - output)
 
-    return 1 - (numerator + 1) / (torch.sum(denominator) + 1)
+    return 1 - (numerator) / (torch.sum(denominator))
 
 
 def focal_tversky_loss(output, target):
@@ -247,7 +259,7 @@ def focal_tversky_loss(output, target):
         
     """
     
-    tversky_loss = tversky_loss_scalar(output, target)
+    tversky_loss = abs(tversky_loss_scalar(output, target))
     
     return torch.pow(tversky_loss, params.loss_gamma)
 
@@ -376,9 +388,9 @@ def load_checkpoint(model, optimizer, path, filename = 'checkpoint.pth.tar'):
     
     if os.path.exists(path):
     
-        if file in files:
+        if filename in files:
             
-            print("=> loading checkpoint '{}'".format(filename))
+            print("=> loading checkpoint '{}'\n".format(filename))
             
             checkpoint = torch.load(file)
             
@@ -388,10 +400,15 @@ def load_checkpoint(model, optimizer, path, filename = 'checkpoint.pth.tar'):
             
             optimizer.load_state_dict(checkpoint['optimizer'])
             
+            best_dice = checkpoint['best_dice']
+            
             loss = checkpoint['loss']
             
-            print("=> loaded checkpoint '{}' (iteration {})"
-                      .format(filename, checkpoint['iteration']))
+            print("=> loaded checkpoint '{}' (iteration {}, dice {})\n"
+                      .format(filename, checkpoint['iteration'],
+                              checkpoint['best_dice']))
+            
+            return model, optimizer, start_epoch, loss, best_dice
         
         
         else:
@@ -403,7 +420,6 @@ def load_checkpoint(model, optimizer, path, filename = 'checkpoint.pth.tar'):
         print('Non-existing path. Please provide a valid path')
   
 
-    return model, optimizer, start_epoch, loss
 
 
 

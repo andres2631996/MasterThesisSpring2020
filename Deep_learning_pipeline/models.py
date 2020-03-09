@@ -205,7 +205,9 @@ class Res_Final(nn.Module):
         
         self.drop = nn.Dropout2d(params.dropout)
 
-        self.conv2 = nn.Conv2d(in_chan, out_chan, kernel, padding=padding)
+        self.conv2 = nn.Conv2d(in_chan, out_chan, 1)
+        
+        
 
 
     def forward(self, x):
@@ -213,6 +215,7 @@ class Res_Final(nn.Module):
         out = self.drop(F.relu(self.bn1(self.conv1(x))))
         
         out = self.conv2(x + out)
+
 
         return out
 
@@ -233,6 +236,10 @@ class UNet_with_Residuals(nn.Module):
         
         if 'both' in params.train_with: # There are two channels
 
+            self.conv1 = nn.Conv2d(4, params.base, params.kernel_size, padding=params.padding)
+        
+        else:
+            
             self.conv1 = nn.Conv2d(2, params.base, params.kernel_size, padding=params.padding)
             
         self.bn1 = EncoderNorm_2d(params.base)
@@ -240,52 +247,25 @@ class UNet_with_Residuals(nn.Module):
         self.drop = nn.Dropout2d(params.dropout)
 
         self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
+        
         self.bn2 = EncoderNorm_2d(params.base)
-        
-        self.Rd = []
-        
-        for i in range(params.layers - 1):
-            
-            if params.layers > 2:
-            
-                if i != params.layers - 2:
-                
-                    self.Rd.append(Res_Down(params.base*(2**(i)), params.base*(2**(i + 1)), params.kernel_size, params.padding))
-                    
-                    if i == params.layers - 3:
-                        
-                        final_features = params.base*(2**(i + 1))
-                
-                elif i == params.layers - 2:
-                    
-                    self.Rd.append(Res_Down(final_features, final_features, params.kernel_size, params.padding))
-            
-            if params.layers == 2:
-                
-                self.Rd.append(Res_Down(params.base, params.base, params.kernel_size, params.padding))
-                
-                final_features = params.base
                 
 
-#        self.Rd1 = Res_Down(64, 128)
-#        self.Rd2 = Res_Down(128, 256)
-#        self.Rd3 = Res_Down(256, 512)
-#        self.Rd4 = Res_Down(512, 512)
-
-        self.fudge = nn.ConvTranspose2d(final_features, final_features//2, params.kernel_size, stride = (1,1),\
+        self.Rd1 = Res_Down(params.base, params.base*2, params.kernel_size, params.padding)
+        self.Rd2 = Res_Down(params.base*2, params.base*4, params.kernel_size, params.padding)
+        self.Rd3 = Res_Down(params.base*4, params.base*4, params.kernel_size, params.padding)
+        #self.Rd4 = Res_Down(params.base*8, params.base*8, params.kernel_size, params.padding)
+        
+        self.fudge = nn.ConvTranspose2d(params.base*4, params.base*4, params.kernel_size, stride = (1,1),\
                 padding = params.padding)
+
         
-        self.Ru = []
+        #self.Ru3 = Res_Up(params.base*8, params.base*8, params.kernel_size, params.padding)
+        self.Ru2 = Res_Up(params.base*4, params.base*4, params.kernel_size, params.padding)
+        self.Ru1 = Res_Up(params.base*4, params.base*2, params.kernel_size, params.padding)
+        self.Ru0 = Res_Up(params.base*2, params.base, params.kernel_size, params.padding)
+
         
-        for i in range(params.layers - 1):
-            
-            if i == 0:
-                
-                self.Ru.append(Res_Up(final_features, final_features, params.kernel_size, params.padding))
-            
-            else:
-                
-                self.Ru.append(Res_Up(final_features//(2**(i-1)),final_features//(2**(i)),params.kernel_size, params.padding))
 
 #        self.Ru3 = Res_Up(512,512)
 #        self.Ru2 = Res_Up(512,256)
@@ -294,49 +274,28 @@ class UNet_with_Residuals(nn.Module):
 
         self.Rf = Res_Final(params.base, outs, params.kernel_size, params.padding)
 
-
     def forward(self, x):
         
         out = self.drop(F.relu(self.bn1(self.conv1(x))))
+        
         e0 = F.relu(self.bn2(self.conv2(out)))
         
-        down_results = [e0]
-        
-        cont_down = 0
-        
-        for Rd in self.Rd:
-            
-            down_results.append(Rd(down_results[cont]))
-            
-            cont_down += 1
 
-#        e1 = self.Rd1(e0)
-#        e2 = self.Rd2(e1)
-#        e3 = self.Rd3(e2)
-#        e4 = self.Rd4(e3)
+
+        e1 = self.Rd1(e0)
+        e2 = self.Rd2(e1)
+        e3 = self.Rd3(e2)
+        #e4 = self.Rd4(e3)
             
-        up_results = [down_results[-1]]
         
-        cont_up = 0
-            
-        for Ru in self.Ru:
-            
-            if cont_up == 0:
-            
-                up_results.append(Ru(up_results[cont_up]))
-            
-            
-            else:
-                
-                up
-            
-            cont_up += 1
 
-        d3 = self.Ru3(e4)
-        d2 = self.Ru2(self.cat(d3[:,256:],e3[:,256:]))
-        d1 = self.Ru1(self.cat(d2[:,128:],e2[:,128:]))
-        d0 = self.Ru0(self.cat(d1[:,64:],e1[:,64:]))
+        #d3 = self.Ru3(e4)
+        d2 = self.Ru2(e3)
+        #d2 = self.Ru2(self.cat(d3[:,(params.base*4):],e3[:,(params.base*4):]))
+        d1 = self.Ru1(self.cat(d2[:,(params.base*2):],e2[:,(params.base*2):]))
+        d0 = self.Ru0(self.cat(d1[:,params.base:],e1[:,params.base:]))
 
-        out = self.Rf(self.cat(e0[:,32:],d0[:,32:]))
+        out = self.Rf(self.cat(e0[:,(params.base//2):],d0[:,(params.base//2):]))
+
 
         return out
