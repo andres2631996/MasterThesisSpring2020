@@ -262,8 +262,6 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
 #                    
 #                    plt.subplot(133)
                     
-                    out = torch.argmax(output, 1)
-                    
                     
                     results_eval = evaluate.evaluate(net, loader_val, i)
                     
@@ -281,7 +279,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                     
                     # Save the model if the validation score increases with respect to previous iterations
                     
-                    if new_dice > prev_dice:
+                    if cont_load == 0:
                     
                         state = {'iteration': i + 1, 'state_dict': net.state_dict(),
                                  'optimizer': optimizer.state_dict(), 'loss': loss, 
@@ -291,28 +289,36 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                         
                         files_saved = os.listdir(params.network_data_path)
                         
-                        if filename in files_saved and cont_load != 1: # Model has been already run with the same parameters
+                        if filename in files_saved: # Model has been already run with the same parameters
                             
                             # Load previous model
                             
                             net, optimizer, start_epoch, loss, best_dice = utilities.load_checkpoint(net, optimizer, 
                                                                                                        params.network_data_path,
                                                                                                        filename)
+                            
+                            
+                            if best_dice > new_dice:
 
-                                
-                            prev_dice = best_dice
+                                prev_dice = best_dice
                             
                             cont_load = 1
                         
-                        else:
-                            
-                            print('Saved model')
-                            
-                            torch.save(state, params.network_data_path + filename)
+                    if new_dice > prev_dice:
                         
-                            prev_dice = new_dice
+                        state = {'iteration': i + 1, 'state_dict': net.state_dict(),
+                                 'optimizer': optimizer.state_dict(), 'loss': loss, 
+                                 'best_dice': new_dice}
                     
-                    print("Training iteration {}: loss: {}\n".format(i, losses[-1]))
+                        filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
+                        
+                        torch.save(state, params.network_data_path + filename)
+                        
+                        print('Saved model\n')
+                    
+                        prev_dice = new_dice
+                    
+                    print("Training iteration {}: average loss: {}\n".format(i, np.mean(losses[-params.eval_frequency:-1])))
                     
                     for l in range(len(results_eval)):
                         
@@ -420,7 +426,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     plt.plot(range(1,len(losses) + 1),losses), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
     
-    plt.title('Evolution of ' + params.loss_fun + ' loss function, fold' + str(k))
+    plt.title('Evolution of ' + params.loss_fun + ' loss function, fold ' + str(k))
     
     plt.savefig(params.network_data_path + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_loss.png')
     
@@ -500,5 +506,5 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     
     
-    return losses[-1], final_results_train, final_results_eval, net.state_dict(), optimizer, optimizer.state_dict()
+    return np.mean(losses[-params.eval_frequency:-1]), final_results_train, final_results_eval, net.state_dict(), optimizer, optimizer.state_dict()
 

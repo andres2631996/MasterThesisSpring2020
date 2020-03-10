@@ -16,19 +16,9 @@ import datetime
 
 import shutil
 
-import copy
-
 import torch
 
-import torch.nn as nn
-
-import torch.optim as optim
-
 import numpy as np
-
-import random
-
-import SimpleITK as sitk
 
 import matplotlib.pyplot as plt
 
@@ -383,7 +373,7 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
             
             loader_train = torch.utils.data.DataLoader(train_dataset,
                                                        num_workers=0, #4 Slave Processes for fetching data
-                                                       batch_size=params.RAM_batch_size, #Number of samples to be loaded into RAM at a time
+                                                       batch_size=params.batch_size, #Number of samples to be loaded into RAM at a time
                                                        pin_memory=True) # Pins memory, enables nonblocking communication with GPU
 
             
@@ -412,12 +402,12 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
                 test = False
                 
                 val_dataset = QFlowDataset(val_raw_paths, val_mask_paths, train, 
-                                           params.train_with, params.three_D, params.augmentation)
+                                           params.train_with, params.three_D, False)
 
 
                 loader_val = torch.utils.data.DataLoader(val_dataset,
                                                          num_workers=0, # Slave Processes for fetching data
-                                                         batch_size=params.RAM_batch_size, #Number of samples to be loaded into RAM at a time,
+                                                         batch_size=params.batch_size, #Number of samples to be loaded into RAM at a time,
                                                          pin_memory=True) # Pins memory, enables nonblocking communication with GPU
                 
                 loader_train = torch.utils.data.DataLoader(train_dataset,
@@ -440,6 +430,8 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
                 for train_patient in train_patients:
                     
                     patientIDs.append(train_patient.split('/')[-2])
+                
+                patientIDs = list(set(patientIDs))
                         
                 patientIDs.sort()
                 
@@ -458,6 +450,8 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
                     
                     patientIDs.append(val_patient.split('/')[-2])
                     
+                patientIDs = list(set(patientIDs))
+                    
                 patientIDs.sort()
                 
                 for patientID in patientIDs:
@@ -473,8 +467,11 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
 #            print("Moved patients:", moved_patients_img, moved_patients_seg)
     
         return loader_train, loader_val
+    
+    
 
 
+    
 # Get list of lists with stratified patients according to their flow 
 
 strKFolds = StratKFold(params.flow_folders, params.excel_path, 
@@ -631,15 +628,15 @@ for i in range(len(metrics_train)):
     
     mean_train = np.mean(metrics_train_array[:,0,i].flatten())
 
-    std_train = np.mean(metrics_train_array[:,1,i].flatten())
+    std_train = np.std(metrics_train_array[:,0,i].flatten())
     
     mean_val = np.mean(metrics_val_array[:,0,i].flatten())
 
-    std_val = np.mean(metrics_val_array[:,1,i].flatten())
+    std_val = np.std(metrics_val_array[:,0,i].flatten())
     
-    print('Final {} over training folds: {} +- {}\n'.format(metrics_names[i], mean_train, std_train))
+    print('Final {} over training folds: {} +- {}\n'.format(params.metrics[i], mean_train, std_train))
     
-    print('Final {} over validation folds: {} +- {}\n'.format(metrics_names[i], mean_val, std_val))
+    print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
     
     # Show in figures cross-validation results, too
     
@@ -649,13 +646,13 @@ for i in range(len(metrics_train)):
 
     plt.bar(np.arange(1,K + 1), metrics_train_array[:,0,i], color = 'b', yerr = metrics_train_array[:,1,i])
     
-    plt.title(str(metrics_names[i]) + ' over training folds')
+    plt.title(str(params.metrics[i]) + ' over training folds')
     
     plt.xlabel('Fold number')
     
-    plt.ylabel(metrics_names[i])
+    plt.ylabel(str(params.metrics[i]))
     
-    fig.savefig(params.network_data_path + metrics_names[i] + '_training_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_training_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
     
     
     # Results for validation
@@ -664,21 +661,21 @@ for i in range(len(metrics_train)):
 
     plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
     
-    plt.title(metrics_names[i] + ' over validation folds')
+    plt.title(str(params.metrics[i]) + ' over validation folds')
     
     plt.xlabel('Fold number')
     
-    plt.ylabel(metrics_names[i])
+    plt.ylabel(str(params.metrics[i]))
     
-    fig.savefig(params.network_data_path + metrics_names[i] + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
     
 
     
 #t1 = time.time()
 #    
-#dataset = QFlowDataset(r_paths[:,0].tolist(), m_paths[0], True, params.train_with, params.three_D, params.augmentation)
+#dataset = QFlowDataset(r_paths[:,3].tolist(), m_paths[3], True, params.train_with, params.three_D, params.augmentation)
 #
-#test_loader = torch.utils.data.DataLoader(dataset, batch_size = 2, num_workers = 0, shuffle=True)
+#test_loader = torch.utils.data.DataLoader(dataset, batch_size = 1, num_workers = 0, shuffle=True)
 #
 #for i,images in enumerate(test_loader):
 #    
@@ -691,11 +688,11 @@ for i in range(len(metrics_train)):
 #t2 = time.time()
 #
 #print(t2-t1)
-##
-##x = np.squeeze(test_images[0].numpy())
-##
-##y = np.squeeze(test_images[1].numpy())
-##
+###
+###x = np.squeeze(test_images[0].numpy())
+###
+###y = np.squeeze(test_images[1].numpy())
+###
 #x = test_images[0].numpy()
 #
 #y = test_images[1].numpy()

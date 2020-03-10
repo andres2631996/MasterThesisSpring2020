@@ -43,7 +43,7 @@ studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
 prep_step = 'raw' # Level of preprocessing to apply for images to the network
 
-train_with = 'mag_' # Type of images to train with
+train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
@@ -118,12 +118,12 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 10000
+I = 25000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*100
+eval_frequency = batch_size*1000
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 
@@ -131,7 +131,7 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.0001 # Learning rate
+lr = 0.00001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 

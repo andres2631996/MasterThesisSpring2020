@@ -318,6 +318,7 @@ class QFlowDataset(data.Dataset):
         
         coincide = 0 # Coincidence flag
         
+
         random_path = np.random.randint(low = 0, high = len(self.mask_paths))
         
         mask_path = self.mask_paths[random_path]
@@ -328,9 +329,14 @@ class QFlowDataset(data.Dataset):
             
             pha_path = self.img_paths[1][random_path]
             
-            if mask_path.replace('msk', 'mag') == mag_path and mask_path.replace('msk', 'pha') == pha_path:
+            if (mask_path.replace('msk', 'mag') == mag_path or mask_path.replace('msk', 'magBF') == mag_path) and mask_path.replace('msk', 'pha') == pha_path:
                 
                 coincide = 1
+            
+            
+            else:
+                
+                coincide = 0
 
         else:
             
@@ -339,6 +345,11 @@ class QFlowDataset(data.Dataset):
             if mask_path.replace('msk', 'pha') == raw_path or mask_path.replace('msk', 'mag') == raw_path or mask_path.replace('msk', 'magBF') == raw_path:
                 
                 coincide = 1
+            
+            
+            else:
+                
+                coincide = 0
         
         if coincide == 1:
             
@@ -358,8 +369,7 @@ class QFlowDataset(data.Dataset):
             print('Raw files and ground truths are not correspondent\n')
             
             exit()
-        
-        
+
         
         # Compute number of channels
         
@@ -382,11 +392,7 @@ class QFlowDataset(data.Dataset):
             augm = Augmentation(img, mask_array, params.augm_params, params.augm_probs, self.work_with)
             
             img, mask_array = augm.__main__()
-            
-            # Extra channel: sum all time frames
-         
-            #
-        
+
         
         elif self.train and self.augmentation and not(self.threeD):
             
@@ -396,7 +402,7 @@ class QFlowDataset(data.Dataset):
 
         
         
-        elif not(self.augmentation) and not(self.threeD):
+        elif (not(self.augmentation) and not(self.threeD)) or (not(self.train) and not(self.threeD)):
             
             random_slice = np.random.randint(low = 0, high = img.shape[2]) # Pick a 2D slice from the volume at random
             
@@ -404,14 +410,6 @@ class QFlowDataset(data.Dataset):
             
             mask_array = mask_array[:,:,random_slice]
         
-        
-        elif not(self.train) and not(self.threeD): 
-            
-            random_slice = np.random.randint(low = 0, high = img.shape[2]) # Pick a 2D slice from the volume at random
-            
-            img = img[:,:,random_slice,:]
-            
-            mask_array = mask_array[:,:,random_slice]
             
 
         if not(self.threeD):
@@ -436,9 +434,9 @@ class QFlowDataset(data.Dataset):
             
             elif channels == 4:
                 
-                aux_img[:,:,:img.shape[-1]] = img
+                aux_img[:,:,:channels//2] = img
             
-                aux_img[:,:,img.shape[-1]:] = sum_time
+                aux_img[:,:,channels//2:] = sum_time
             
             # Transform list of raw files and mask files into tensor
             
@@ -459,6 +457,7 @@ class QFlowDataset(data.Dataset):
             X = X.permute(-1,0,1,2) # Channels first
     
             Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
+        
             
 
         return X,Y, mask_path
