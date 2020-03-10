@@ -53,21 +53,42 @@ def preprocessingType(preprocessing):
     
     """
     
-    if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
-
-        start_folder = '/home/andres/Documents/_Data/_Patients/_Raw/'
-
-    elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
-        
-        start_folder = '/home/andres/Documents/_Data/_Patients/_Prep/'
+    if params.three_D:
     
-    elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
+        if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
+    
+            start_folder = '/home/andres/Documents/_Data/_Patients/_Raw/'
+    
+        elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
+            
+            start_folder = '/home/andres/Documents/_Data/_Patients/_Prep/'
         
-        start_folder = '/home/andres/Documents/_Data/_Patients/_Pre_crop/'
+        elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
+            
+            start_folder = '/home/andres/Documents/_Data/_Patients/_Pre_crop/'
+        
+        else:
+            
+            print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
+    
     
     else:
+
+        if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
+    
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/'
+    
+        elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
+            
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Prep/'
         
-        print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
+        elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
+            
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Pre_crop/'
+        
+        else:
+            
+            print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
     
     return start_folder
 
@@ -132,51 +153,112 @@ def extractVTKfilesStratification(patient_paths):
     
     for fold in patient_paths:
         
+        # Access 3D VTK files
+        
         patient_paths[cont] = [preprocessingType(params.prep_step) + path for path in fold]
     
         for patient_path in patient_paths[cont]: # Look for all images in the given paths
+            
+            if params.three_D:
         
-            images = sorted(os.listdir(patient_path)) 
+                images = sorted(os.listdir(patient_path)) 
+            
+                if 'both' in params.train_with:
+                    
+                    if params.train_with == 'bothBF':
+                        
+                        ind_mag = [i for i,s in enumerate(images) if 'magBF' in s]
+                    
+                    elif params.train_with == 'both':
+                        
+                        ind_mag = [i for i,s in enumerate(images) if 'mag_' in s]
         
-            if 'both' in params.train_with:
-                
-                if params.train_with == 'bothBF':
+                    ind_pha = [i for i,s in enumerate(images) if 'pha' in s]
                     
-                    ind_mag = [i for i,s in enumerate(images) if 'magBF' in s]
-                
-                elif params.train_with == 'both':
+                    ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
                     
-                    ind_mag = [i for i,s in enumerate(images) if 'mag_' in s]
-    
-                ind_pha = [i for i,s in enumerate(images) if 'pha' in s]
-                
-                ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
-                
-                for ind_m, ind_p, ind_mk in zip(ind_mag, ind_pha, ind_msk):
+                    for ind_m, ind_p, ind_mk in zip(ind_mag, ind_pha, ind_msk):
+                        
+                        mag_path.append(patient_path + images[ind_m])
+                        
+                        pha_path.append(patient_path + images[ind_p])
+                        
+                        mask_path.append(patient_path + images[ind_mk])
                     
-                    mag_path.append(patient_path + images[ind_m])
-                    
-                    pha_path.append(patient_path + images[ind_p])
-                    
-                    mask_path.append(patient_path + images[ind_mk])
                 
+                else:
+                    
+                    ind_raw = [i for i,s in enumerate(images) if params.train_with in s]
+                    
+                    ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
+                    
+                    for ind, ind_m in zip(ind_raw,ind_msk):
+                        
+                        raw_path.append(patient_path + images[ind])
+                        
+                        mask_path.append(patient_path + images[ind_m])
             
             else:
                 
-                ind_raw = [i for i,s in enumerate(images) if params.train_with in s]
+                # Access 2D VTK files
                 
-                ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
+                modalities = sorted(os.listdir(patient_path))
                 
-                for ind, ind_m in zip(ind_raw,ind_msk):
+                for modality in modalities:
                     
-                    raw_path.append(patient_path + images[ind])
+                    modality_path = patient_path + modality + '/'
                     
-                    mask_path.append(patient_path + images[ind_m])
+                    images = sorted(os.listdir(modality_path))
                     
+                    if params.train_with == 'mag_': 
                     
+                        if modality == 'mag':
+                        
+                            raw_path.append(images)
                     
+                    elif params.train_with == 'pha':
+                        
+                        if modality == 'pha':
+                        
+                            raw_path.append(images)
+                    
+                    elif params.train_with == 'magBF':
+                        
+                        if modality == 'magBF':
+                            
+                            raw_path.append(images)
+                    
+                    elif params.train_with == 'both':
+                        
+                        if modality == 'mag':
+                            
+                            mag_path.append(images)
+                        
+                        elif modality == 'pha':
+                            
+                            pha_path.append(images)
+                        
+                    elif params.train_with == 'bothBF':
+                        
+                        if modality == 'magBF':
+                            
+                            mag_path.append(images)
+                        
+                        elif modality == 'pha':
+                            
+                            pha_path.append(images)
+                    
+                    if modality == 'msk':
+                        
+                        mask_path.append(images)
+                    
+        mask_path = list(itertools.chain.from_iterable(mask_path))            
                     
         if 'both' in params.train_with:
+            
+            mag_path = list(itertools.chain.from_iterable(mag_path))
+            
+            pha_path = list(itertools.chain.from_iterable(pha_path))
             
             mag_paths.append(mag_path)
             
@@ -191,6 +273,8 @@ def extractVTKfilesStratification(patient_paths):
             mask_path = []
     
         else:
+            
+            raw_path = list(itertools.chain.from_iterable(raw_path))
             
             raw_paths.append(raw_path)
                 
@@ -373,7 +457,7 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
             
             loader_train = torch.utils.data.DataLoader(train_dataset,
                                                        num_workers=0, #4 Slave Processes for fetching data
-                                                       batch_size=params.batch_size, #Number of samples to be loaded into RAM at a time
+                                                       batch_size=params.RAM_batch_size, #Number of samples to be loaded into RAM at a time
                                                        pin_memory=True) # Pins memory, enables nonblocking communication with GPU
 
             
@@ -407,12 +491,13 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
 
                 loader_val = torch.utils.data.DataLoader(val_dataset,
                                                          num_workers=0, # Slave Processes for fetching data
-                                                         batch_size=params.batch_size, #Number of samples to be loaded into RAM at a time,
+                                                         batch_size=params.RAM_batch_size, #Number of samples to be loaded into RAM at a time,
                                                          pin_memory=True) # Pins memory, enables nonblocking communication with GPU
                 
                 loader_train = torch.utils.data.DataLoader(train_dataset,
                                                            num_workers=0, #4 Slave Processes for fetching data
-                                                           batch_size=params.batch_size, #Number of samples to be loaded into RAM at a time 
+                                                           batch_size=params.RAM_batch_size, #Number of samples to be loaded into RAM at a time 
+                                                           shuffle=True,
                                                            pin_memory=True) # Pins memory, enables nonblocking communication with GPU
     
             
@@ -550,124 +635,128 @@ for k in range(K):
     
     
     train_raw_path, train_mask_path, val_raw_path, val_mask_path, train_patients, val_patients = pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths)
-    
-            
-    # Training and validation data loaders
-
-    loader_train, loader_val = get_data_loader(train_raw_path, train_mask_path, k, K, 
-                                                data_path, val_raw_path, val_mask_path, 
-                                                train_patients, val_patients)
-    
-    
-    # Train and evaluate
-    
-    print("\nStart training network, fold " + str(k) + "...\n")
-
-    loss, metrics_train, metrics_val, model_state, optimizer, optimizer_state = train.train(net, loader_train, loader_val, 
-                                                                                            k, params.eval_frequency, 
-                                                                                            params.I)
-    
-    
-    # Save model and optimizer for later inference
-    
-    utilities.model_saving(model_state, optimizer_state, params.network_data_path, 'FinalTrainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar')
-    
-    losses.append(loss)
-
-    metrics_names = np.unique(metrics_train_array[:,0])
-    
-    for i in range(len(metrics_train)):
-        
-        # Store arrays with mean and standard deviation results
-        
-        metrics_train_array[k,:,i] = np.array([float(metrics_train[i][1]),float(metrics_train[i][2])])
-        
-        metrics_val_array[k,:,i] = np.array([float(metrics_val[i][1]),float(metrics_val[i][2])])
-        
-    
-    
-     #Prints time estimate
-     
-    pred_time_seconds = (time.time()-starting_time)*K/(k+1)
-     
-    ETA = (datetime.datetime(curr_date.year,
-        curr_date.month,
-        curr_date.day,
-        curr_time.hour, 
-        curr_time.minute, 
-        curr_time.second) + datetime.timedelta(seconds = pred_time_seconds)).strftime("%Y-%m-%d %H:%M:%S")
-    
-    print("Estimated time of Arrival: ", ETA)  
-
-
-
-# Print cross-validation results and show figures
-        
-mean_loss = np.mean(np.array(losses))
-
-std_loss = np.std(np.array(losses))
-
-print('\nFinal {} loss over folds: {} +- {}\n'.format(params.loss_fun, mean_loss, std_loss))
-
-fig = plt.figure(figsize = (13,5))
-
-plt.bar(np.arange(1,K + 1),losses, color = 'b')
-
-plt.title(params.loss_fun + ' loss over folds')
-
-plt.xlabel('Fold number')
-
-plt.ylabel(params.loss_fun + ' loss')
-
-fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
-
-
-
-    
-for i in range(len(metrics_train)):
-    
-    mean_train = np.mean(metrics_train_array[:,0,i].flatten())
-
-    std_train = np.std(metrics_train_array[:,0,i].flatten())
-    
-    mean_val = np.mean(metrics_val_array[:,0,i].flatten())
-
-    std_val = np.std(metrics_val_array[:,0,i].flatten())
-    
-    print('Final {} over training folds: {} +- {}\n'.format(params.metrics[i], mean_train, std_train))
-    
-    print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
-    
-    # Show in figures cross-validation results, too
-    
-    # Results for training
-       
-    fig = plt.figure(figsize = (13,5))
-
-    plt.bar(np.arange(1,K + 1), metrics_train_array[:,0,i], color = 'b', yerr = metrics_train_array[:,1,i])
-    
-    plt.title(str(params.metrics[i]) + ' over training folds')
-    
-    plt.xlabel('Fold number')
-    
-    plt.ylabel(str(params.metrics[i]))
-    
-    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_training_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
-    
-    
-    # Results for validation
-    
-    fig = plt.figure(figsize = (13,5))
-
-    plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
-    
-    plt.title(str(params.metrics[i]) + ' over validation folds')
-    
-    plt.xlabel('Fold number')
-    
-    plt.ylabel(str(params.metrics[i]))
-    
-    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+#    
+#            
+#    # Training and validation data loaders
+#
+#    loader_train, loader_val = get_data_loader(train_raw_path, train_mask_path, k, K, 
+#                                                data_path, val_raw_path, val_mask_path, 
+#                                                train_patients, val_patients)
+#    
+#    
+#    # Train and evaluate
+#    
+#    print("\nStart training network, fold " + str(k) + "...\n")
+#
+#    loss, metrics_train, metrics_val, model_state, optimizer, optimizer_state = train.train(net, loader_train, loader_val, 
+#                                                                                            k, params.eval_frequency, 
+#                                                                                            params.I)
+#    
+#    
+#    # Save model and optimizer for later inference
+#    
+#    utilities.model_saving(model_state, optimizer_state, params.network_data_path, 'FinalTrainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar')
+#    
+#    losses.append(loss)
+#
+#    cont_train_result = 0
+#    
+#    cont_val_result = 0
+#    
+#    for i in range(len(params.metrics)):
+#        
+#        # Store arrays with mean and standard deviation results
+#        
+#        metrics_train_array[k,:,i] = np.array([metrics_train[cont_train_result], metrics_train[cont_train_result + 1]])
+#        
+#        cont_train_result += 2
+#        
+#        metrics_val_array[k,:,i] = np.array([metrics_val[cont_val_result], metrics_val[cont_val_result + 1]])
+#        
+#        cont_val_result += 2
+#    
+#     #Prints time estimate
+#     
+#    pred_time_seconds = (time.time()-starting_time)*K/(k+1)
+#     
+#    ETA = (datetime.datetime(curr_date.year,
+#        curr_date.month,
+#        curr_date.day,
+#        curr_time.hour, 
+#        curr_time.minute, 
+#        curr_time.second) + datetime.timedelta(seconds = pred_time_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+#    
+#    print("Estimated time of Arrival: ", ETA)  
+#
+#
+#
+## Print cross-validation results and show figures
+#        
+#mean_loss = np.mean(np.array(losses))
+#
+#std_loss = np.std(np.array(losses))
+#
+#print('\nFinal {} loss over folds: {} +- {}\n'.format(params.loss_fun, mean_loss, std_loss))
+#
+#fig = plt.figure(figsize = (13,5))
+#
+#plt.bar(np.arange(1,K + 1),losses, color = 'b')
+#
+#plt.title(params.loss_fun + ' loss over folds')
+#
+#plt.xlabel('Fold number')
+#
+#plt.ylabel(params.loss_fun + ' loss')
+#
+#fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+#
+#
+#
+#    
+#for i in range(len(params.metrics)):
+#    
+#    mean_train = np.mean(metrics_train_array[:,0,i].flatten())
+#
+#    std_train = np.std(metrics_train_array[:,0,i].flatten())
+#    
+#    mean_val = np.mean(metrics_val_array[:,0,i].flatten())
+#
+#    std_val = np.std(metrics_val_array[:,0,i].flatten())
+#    
+#    print('Final {} over training folds: {} +- {}\n'.format(params.metrics[i], mean_train, std_train))
+#    
+#    print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
+#    
+#    # Show in figures cross-validation results, too
+#    
+#    # Results for training
+#       
+#    fig = plt.figure(figsize = (13,5))
+#
+#    plt.bar(np.arange(1,K + 1), metrics_train_array[:,0,i], color = 'b', yerr = metrics_train_array[:,1,i])
+#    
+#    plt.title(str(params.metrics[i]) + ' over training folds')
+#    
+#    plt.xlabel('Fold number')
+#    
+#    plt.ylabel(str(params.metrics[i]))
+#    
+#    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_training_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+#    
+#    
+#    # Results for validation
+#    
+#    fig = plt.figure(figsize = (13,5))
+#
+#    plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
+#    
+#    plt.title(str(params.metrics[i]) + ' over validation folds')
+#    
+#    plt.xlabel('Fold number')
+#    
+#    plt.ylabel(str(params.metrics[i]))
+#    
+#    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
     
 
     

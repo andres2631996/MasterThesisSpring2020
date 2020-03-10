@@ -59,11 +59,11 @@ class Dice():
         
         denominator = 0
         
-        numerator += float(torch.sum(torch.mul(self.ground_truth, self.prediction)).cpu())
+        numerator += float(torch.sum(torch.mul(self.ground_truth, self.prediction)))
         
-        denominator += float(torch.add(torch.sum(self.ground_truth), torch.sum(self.prediction)).cpu())
+        denominator += float(torch.add(torch.sum(self.ground_truth), torch.sum(self.prediction)))
         
-        return 2*numerator/(denominator + 0.000000001)
+        return (2*numerator/(denominator + 0.000000001))
     
     
     
@@ -99,11 +99,11 @@ class Precision():
         
         denominator = 0
         
-        numerator += float(torch.sum(torch.mul(self.ground_truth, self.prediction)).cpu())
+        numerator += float(torch.sum(torch.mul(self.ground_truth, self.prediction)))
         
-        denominator += float(torch.sum(self.prediction).cpu())
+        denominator += float(torch.sum(self.prediction))
         
-        return numerator/(denominator + 0.000000001)
+        return (numerator/(denominator + 0.000000001))
     
     
 
@@ -138,11 +138,11 @@ class Recall():
         
         denominator = 0
         
-        numerator += float(torch.sum(torch.mul(self.ground_truth, self.prediction)).cpu())
+        numerator += float(torch.sum(torch.mul(self.ground_truth, self.prediction)))
         
-        denominator += float(torch.sum(self.ground_truth).cpu())
+        denominator += float(torch.sum(self.ground_truth))
         
-        return numerator/(denominator + 0.000000001)
+        return (numerator/(denominator + 0.000000001))
         
 
 
@@ -306,7 +306,9 @@ def evaluate(net, loader, iteration):
 
         batch_gpu_max = params.batch_GPU_max_inference
         
-        ram_batch_size = params.RAM_batch_size
+        batch_gpu = params.batch_GPU
+        
+        batch_size = params.batch_size
         
         metrics = params.metrics
         
@@ -318,17 +320,19 @@ def evaluate(net, loader, iteration):
         
         results = [] # List with overall results: METRIC NAME, MEAN AND STD!!
 
-        for X, Y, _ in loader:
+        for X, Y, name in loader:
             
             # Extracts the data from dataloader and puts it into the network
             
-            for i in range(min(math.ceil(ram_batch_size/batch_gpu_max), math.ceil(X.shape[0]/batch_gpu_max))):
+            for i in range(int(X.shape[0]/batch_size)):
+            
+#            for i in range(min(math.ceil(ram_batch_size/batch_gpu_max), math.ceil(X.shape[0]/batch_gpu_max))):
                 
                 startIndiex = i*batch_gpu_max
                 
-                stopXIndex = min((i+1)*batch_gpu_max, X.shape[0])
+                stopXIndex = min((i+1)*batch_gpu, X.shape[0])
                 
-                stopYIndex = min((i+1)*batch_gpu_max, Y.shape[0])
+                stopYIndex = min((i+1)*batch_gpu, Y.shape[0])
                 
                 if params.three_D: # Training in 2D with one channel
     
@@ -341,10 +345,14 @@ def evaluate(net, loader, iteration):
                     x_part = X[startIndiex:stopXIndex,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
                     
                     y_part = Y[startIndiex:stopYIndex,:,:].cuda()
+
                 
                 output = net(x_part).data #Run the samples though the network and get the predictions 
                 
-                output = torch.argmax(output, 1) #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
+                output = torch.argmax(output, 1).cuda() #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
+                
+                
+                t1 = time.time()
                 
                 for j in range(x_part.shape[0]):
                     
@@ -376,6 +384,10 @@ def evaluate(net, loader, iteration):
                             print('Unspecified metric. Please provide an adequate metric (Dice/Precision/Recall)\n')
                             
                             exit()
+                            
+                t2 = time.time()
+                
+                print(t2-t1)
                         
                             
         if ('Dice' in metrics) or ('dice' in metrics) or ('DICE' in metrics):

@@ -74,21 +74,15 @@ class Augmentations2D:
                 )
         
         
-        random_frame = np.random.randint(low = 0, high = self.img.shape[2])
+    
         
-        img = self.img[:,:,random_frame,:]
+        mask_new = np.zeros((self.mask.shape[0], self.mask.shape[1], 1 + self.sum_t.shape[2]))
         
-        mask = self.mask[:,:,random_frame]
+        mask_new[:,:,0] = self.mask
         
-        sum_t = np.sum(self.img, axis = 2)/self.img.shape[2] # Summed image along time
+        mask_new[:,:,1:] = self.sum_t
         
-        mask_new = np.zeros((mask.shape[0], mask.shape[1], 1 + sum_t.shape[2]))
-        
-        mask_new[:,:,0] = mask
-        
-        mask_new[:,:,1:] = sum_t
-        
-        data = {"image": img, "mask": mask_new}
+        data = {"image": self.img, "mask": mask_new}
 
         
         img, mask, sum_t = self.augment_slices(augmentation_pipeline, data)

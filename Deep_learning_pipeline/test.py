@@ -464,6 +464,8 @@ class testing:
         
         img_arrays = []
         
+        sum_t_list = []
+        
         for i in range(len(self.img_filename)):
             
             # Load images
@@ -473,6 +475,10 @@ class testing:
             img_array, origin, spacing = self.readVTK(self.img_filename[i])
             
             img_arrays.append(img_array)
+            
+            if sel
+        
+            sum_t_list.append(np.sum(img_array, axis = -1))
         
         
         # Adjust to adequate tensor dimensions
@@ -482,10 +488,12 @@ class testing:
         for i in range(len(self.img_filename)):
             
             img[:,:,:,:,i] = img_arrays[i]
+            
+            
         
         X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float()
             
-        X = X.permute(-1,0,1,2) # Channels first
+        X = X.permute(0, -1, 1, 2,-2) # Channels first
 
         if self.mask_filename is not None:
 
@@ -696,7 +704,7 @@ class testing:
                 
                 if params.three_D: # 2D + time architecture
                     
-                    out = self.model(X.cuda(non_blocking=True)).data
+                    out = model(X.cuda(non_blocking=True)).data
                     
                     out = torch.argmax(out, 1).cpu() # Inference output
                     
@@ -706,7 +714,7 @@ class testing:
                     
                     for i in range(X.shape[-1]):
                         
-                        out_aux = self.model(X[:,:,:,:,i].cuda(non_blocking=True)).data
+                        out_aux = model(X[:,:,:,:,i].cuda(non_blocking=True)).data
                         
                         out[:,:,:,i] = torch.argmax(out_aux, 1).cpu() # Inference output
                 
@@ -788,8 +796,8 @@ class testing:
 
 
 
-test = testing('CKD2_CKD019_MRI3_dx_mag_0.vtk', '/home/andres/Documents/_Data/_Patients/_Raw/_ckd2/CKD019_MRI3/', 
-               'CKD2_CKD019_MRI3_dx_msk_0.vtk', 'FinalTrainedWithmag__rawfold_3.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
+test = testing(['CKD2_CKD019_MRI3_dx_magBF_0.vtk'], '/home/andres/Documents/_Data/_Patients/_Raw/_ckd2/CKD019_MRI3/', 
+               'CKD2_CKD019_MRI3_dx_msk_0.vtk', 'trainedWithmagBF_rawfold_1.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
                '/home/andres/Documents/_Data/CKD_Part2/4_Flow/','/home/andres/Documents/_Results/Test_09March')
 
 flow = test.__main__()

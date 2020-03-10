@@ -120,6 +120,12 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     train_metrics = [] # Stores dict of train metrics from every [eval_frequency] step
     
     it = [] # Stores iteration indexes when network is evaluated
+    
+    loss_print = [] # Average loss for printing
+    
+    overall_results_train = [] # List with averaged train metrics results per fold
+    
+    overall_results_val = [] # List with averaged validation metrics results per fold
 
     
     i = 0
@@ -244,7 +250,8 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
 #                        print("Training iteration {}: loss: {}".format(i, losses[-1]))
 #                        
 #                        print("Elapsed training time: {}".format(time.time() - start_time))
-
+                
+                
                 
                 if eval_frequency != -1 and loader_val != None and i % eval_frequency in range(batch_size) and i not in range(batch_size):
                     
@@ -263,10 +270,10 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
 #                    plt.subplot(133)
                     
                     
-                    results_eval = evaluate.evaluate(net, loader_val, i)
-                    
                     results_train = evaluate.evaluate(net, loader_train, i)
-                
+                    
+                    results_eval = evaluate.evaluate(net, loader_val, i)
+
                     eval_metrics.append(results_eval)
                     
                     train_metrics.append(results_train)
@@ -319,6 +326,8 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                         prev_dice = new_dice
                     
                     print("Training iteration {}: average loss: {}\n".format(i, np.mean(losses[-params.eval_frequency:-1])))
+                    
+                    loss_print.append(np.mean(losses[-params.eval_frequency:-1]))
                     
                     for l in range(len(results_eval)):
                         
@@ -380,29 +389,8 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     train_metrics = list(itertools.chain.from_iterable(train_metrics))
 
-    #Final evaluation for creating MIPs etc
     
-    if loader_val != None:
-        
-        final_results_eval = evaluate.evaluate(net, loader_val, I)
-    
-    final_results_train = evaluate.evaluate(net, loader_train, I)
-
-    #listenPaus.kill()
-
-    end_time = time.time()
-    
-    print('Final loss: {}\n'.format(losses[-1]))
-    
-    for i in range(len(final_results_eval)):
-                        
-        print("Final Training {}: {} +- {} / Final Validation {}: {} +- {}\n".
-              format(final_results_train[i][0], final_results_train[i][1], 
-                     final_results_train[i][2], final_results_eval[i][0], 
-                     final_results_eval[i][1], final_results_eval[i][2]))
-
-    
-    print("Elapsed training time: {}".format(end_time - start_time))
+    print("Elapsed training time: {}".format(time.time() - start_time))
     
     # Saves training losses as a file
     
@@ -424,7 +412,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     plt.figure(figsize = (13,5))
     
-    plt.plot(range(1,len(losses) + 1),losses), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
+    plt.plot(it,loss_print), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
     
     plt.title('Evolution of ' + params.loss_fun + ' loss function, fold ' + str(k))
     
@@ -489,8 +477,6 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
 
         fig = plt.figure(figsize = (13,5))
         
-
-        
         plt.errorbar(it, m_metric_train, yerr =  s_metric_train, color ='b', label = 'Training')
         
         plt.errorbar(it, m_metric_eval, yerr =  s_metric_eval, color = 'r', label = 'Validation')
@@ -502,9 +488,17 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
         plt.legend()
         
         fig.savefig(params.network_data_path + '/' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_' + metric_name + '.png')
+        
+        # Average result appending
+        
+        overall_results_train.append(np.mean(m_metric_train))
+        
+        overall_results_train.append(np.mean(s_metric_train))
+        
+        overall_results_val.append(np.mean(m_metric_eval))
+        
+        overall_results_val.append(np.mean(s_metric_eval))
+
     
-    
-    
-    
-    return np.mean(losses[-params.eval_frequency:-1]), final_results_train, final_results_eval, net.state_dict(), optimizer, optimizer.state_dict()
+    return np.mean(losses[-params.eval_frequency:-1]), overall_results_train, overall_results_val, net.state_dict(), optimizer, optimizer.state_dict()
 

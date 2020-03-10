@@ -386,35 +386,6 @@ class StratKFold:
         for study, path in zip(self.studies, self.folders):
             
             patients, flow = self.flowFromMat(path, study)
-            
-            #print(patients)
-            
-#            if self.rep: # Repetition of minority patients
-#                
-#                if (study != 'Hero') and (study != 'Extr'):
-#                    
-#                    all_flows.append(flow)
-#                    
-#                    all_patients.append(patients)
-#                
-#                elif study == 'Hero':
-#                    
-#                    for i in range(3):
-#                        
-#                        all_flows.append(flow)
-#                        
-#                        all_patients.append(patients)
-#                        
-#                
-#                elif study == 'Extr':
-#                    
-#                    for i in range(5):
-#                        
-#                        all_flows.append(flow)
-#                        
-#                        all_patients.append(patients)
-#            
-#            else:
                 
             all_flows.append(flow)
                 

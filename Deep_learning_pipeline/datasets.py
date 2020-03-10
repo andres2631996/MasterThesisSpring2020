@@ -86,7 +86,7 @@ class QFlowDataset(data.Dataset):
 #        
     def __len__(self):
         
-        return len(self.img_paths)
+        return len(self.mask_paths)
     
     
     def readVTK(self, filename, order='F'):
@@ -128,180 +128,6 @@ class QFlowDataset(data.Dataset):
     
         return numpy_array, origin, spacing
 
-    
-    
-    
-    
-#    def extractArrays(self, img_path):
-#        
-#        """
-#        Provide raw arrays and mask arrays of a certain path depending on the
-#        working method provided
-#        
-#        
-#        - Params:
-#            
-#            - inherited by the class (see class description)
-#            
-#            - path: folder with images where to look at 
-#        
-#        - Returns:
-#            
-#            - raw_arrays: list of raw arrays
-#            
-#            - mask_arrays: list of mask arrays
-#            
-#            - raw_names: list of raw array names (to check that raw files and masks correspond)
-#            
-#            - mask_arrays: list of mask array names (to check that raw files and masks correspond)
-#        
-#        
-#        """
-#        
-#        patient_files = sorted(os.listdir(img_path))
-#        
-#        raw_arrays = []
-#
-#        raw_names = []
-#
-#        if not(self.test):
-#            
-#            mask_arrays = []
-#            
-#            mask_names = []
-#        
-#        if len(patient_files) == 0:
-#            
-#            print('Empty folder. Please specify an adequate folder\n')
-#        
-#        else:
-#            
-#            # Extract list with raw arrays
-#        
-#            if 'both' in self.work_with:
-#                
-#                if self.work_with == 'both' or self.work_with == 'Both' or self.work_with == 'BOTH':
-#                    
-#                    # Load both magnitude and phase images. Magnitude images are not bias-field-corrected
-#                    
-#                    ind_mag_files = [i for i, s in enumerate(patient_files) if 'mag_' in s]
-#                    
-#                    ind_pha_files = [i for i, s in enumerate(patient_files) if 'pha' in s]
-#                    
-#                    
-#                elif self.work_with == 'bothBF' or self.work_with == 'BothBF' or self.work_with == 'BOTHBF' or self.work_with == 'bothBf' or self.work_with == 'BothBf' or self.work_with == 'BOTHBf' or self.work_with == 'bothbf' or self.work_with == 'BOTHBF':
-#                    
-#                    # Load both magnitude and phase images. Magnitude images are bias-field-corrected
-#                    
-#                    ind_mag_files = [i for i, s in enumerate(patient_files) if 'magBF' in s]
-#                    
-#                    ind_pha_files = [i for i, s in enumerate(patient_files) if 'pha' in s]
-#                    
-#                cont_pha = 0
-#             
-#                for ind_mag in ind_mag_files:
-#                   
-#                    mag_array, _, _ = self.readVTK(img_path, patient_files[ind_mag])
-#                    
-#                    pha_array, _, _ = self.readVTK(img_path, patient_files[ind_pha_files[cont_pha]])
-#                    
-#                    final_array = np.zeros((mag_array.shape[0], mag_array.shape[1], mag_array.shape[2], 2))
-#                    
-#                    final_array[:,:,:,0] = mag_array
-#                    
-#                    final_array[:,:,:,1] = pha_array
-#                    
-#                    raw_names.append(patient_files[ind_mag])
-#                        
-#                    raw_arrays.append(final_array)
-#               
-#                    cont_pha += 1
-#            
-#            else:
-#            
-#                if self.work_with == 'mag' or self.work_with == 'Mag' or self.work_with == 'MAG':
-#        
-#                        
-#                    # Load only magnitude images without bias field correction
-#                   
-#                    ind_raw_files = [i for i, s in enumerate(patient_files) if 'mag_' in s]
-#               
-#               
-#                elif self.work_with == 'magBF' or self.work_with == 'MagBF' or self.work_with == 'MAGBF' or self.work_with == 'magBf' or self.work_with == 'MagBf' or self.work_with == 'MAGBf' or self.work_with == 'magbf' or self.work_with == 'MAGBF':
-#                   
-#                   # Load only magnitude images with bias field correction
-#                    
-#                   ind_raw_files = [i for i, s in enumerate(patient_files) if 'magBF' in s]
-#               
-#               
-#                elif self.work_with == 'pha' or self.work_with == 'Pha' or self.work_with == 'PHA':
-#                    
-#                    # Load only phase images
-#                   
-#                    ind_raw_files = [i for i, s in enumerate(patient_files) if 'pha' in s]
-#                    
-#             
-#                for ind_raw in ind_raw_files:
-#                    
-#                    raw_names.append(patient_files[ind_raw])
-#                   
-#                    raw_array, _, _ = self.readVTK(img_path, patient_files[ind_raw])
-#                        
-#                    raw_arrays.append(raw_array)
-#                   
-#                        
-#            
-#        # Extract list with mask arrays
-#        
-#        if not(self.test):
-#        
-#            ind_mask_files = [i for i, s in enumerate(patient_files) if 'msk' in s]
-#           
-#            cont = 0
-#            
-#            for ind_mask in ind_mask_files:
-#                
-#                # Check that raw files and masks coincide in position in the dataset
-#                
-#                flag = 'continue'
-#                
-#                if 'both' in self.work_with:
-#                    
-#                    test_raw_name = patient_files[ind_mask].replace('msk', 'pha')
-#           
-#                    if test_raw_name != patient_files[ind_pha_files[cont]]:
-#                        
-#                        flag = 'stop'
-#                        
-#                        print('Raw and mask files do not correspond')
-#                
-#                else:
-#                    
-#                    test_raw_name = patient_files[ind_mask].replace('msk', self.work_with)
-#             
-#                    if test_raw_name != patient_files[ind_raw_files[cont]]:
-#                        
-#                        flag = 'stop'
-#                        
-#                        print('Raw and mask files do not correspond')
-#                
-#                
-#                if flag != 'stop':
-#                
-#                    mask_array, _, _ = self.readVTK(img_path, patient_files[ind_mask])
-#    
-#                    mask_names.append(patient_files[ind_mask])
-#                            
-#                    mask_arrays.append(mask_array)
-#            
-#                cont += 1
-#        
-#            return raw_arrays, mask_arrays, raw_names, mask_names
-#        
-#        
-#        else:
-#            
-#            return raw_arrays, raw_names
 
  
                 
@@ -309,8 +135,7 @@ class QFlowDataset(data.Dataset):
         
 #
     def __getitem__(self, index):
-#
-#        name = os.path.basename(self.img_paths[index])
+
 #
 #        # Load images depending on parameter "work_with"
         
@@ -318,17 +143,21 @@ class QFlowDataset(data.Dataset):
         
         coincide = 0 # Coincidence flag
         
+        ind = index
 
-        random_path = np.random.randint(low = 0, high = len(self.mask_paths))
-        
-        mask_path = self.mask_paths[random_path]
+        mask_path = self.mask_paths[ind]
         
         if len(self.img_paths) == 2:
             
-            mag_path = self.img_paths[0][random_path]
+            mag_paths = self.img_paths[0]
             
-            pha_path = self.img_paths[1][random_path]
+            pha_paths = self.img_paths[1]
             
+            pha_path = pha_paths[ind]
+            
+            mag_path = mag_paths[ind]
+
+
             if (mask_path.replace('msk', 'mag') == mag_path or mask_path.replace('msk', 'magBF') == mag_path) and mask_path.replace('msk', 'pha') == pha_path:
                 
                 coincide = 1
@@ -340,7 +169,9 @@ class QFlowDataset(data.Dataset):
 
         else:
             
-            raw_path = self.img_paths[0][random_path]
+            raw_paths = self.img_paths[0]
+            
+            raw_path = raw_paths[ind]
             
             if mask_path.replace('msk', 'pha') == raw_path or mask_path.replace('msk', 'mag') == raw_path or mask_path.replace('msk', 'magBF') == raw_path:
                 
@@ -353,16 +184,49 @@ class QFlowDataset(data.Dataset):
         
         if coincide == 1:
             
-            mask_array,_, _ = self.readVTK(self.mask_paths[random_path])
+            mask_array,_, _ = self.readVTK(mask_path)
             
-            img = np.zeros((mask_array.shape[0], mask_array.shape[1], mask_array.shape[2],len(self.img_paths)))
+            if not(params.three_D): # 2D VTK files only have one slice in T
+                
+                mask_array = mask_array[:,:,0]
+                
+                img = np.zeros((mask_array.shape[0], mask_array.shape[1],len(self.img_paths)))
             
-            for i in range(len(self.img_paths)):
+            else:
+            
+                img = np.zeros((mask_array.shape[0], mask_array.shape[1], mask_array.shape[2],len(self.img_paths)))
+            
+            if len(self.img_paths) == 1:
                 
-                raw_array, _, _ = self.readVTK(self.img_paths[i][random_path])
+                raw_array,_,_ = self.readVTK(raw_path)
                 
-                img[:,:,:,i] = raw_array
+                if params.three_D:
                 
+                    img[:,:,:,0] = raw_array
+                
+                else:
+                    
+                    img[:,:,0] = raw_array[:,:,0]
+            
+            else:
+                
+                mag_array,_,_ = self.readVTK(mag_path)
+                
+                pha_array,_,_ = self.readVTK(pha_path)
+                
+                if params.three_D:
+                
+                    img[:,:,:,0] = mag_array
+                    
+                    img[:,:,:,1] = pha_array
+                
+                
+                else:
+
+                    img[:,:,0] = mag_array[:,:,0]
+                    
+                    img[:,:,1] = pha_array[:,:,0]
+                    
             
         else:
             
@@ -371,15 +235,20 @@ class QFlowDataset(data.Dataset):
             exit()
 
         
-        # Compute number of channels
+        # Compute number of channels and obtain sum of slices over time
         
         if 'both' in params.train_with:
             
             channels = 4
+            
+            
         
         else:
             
             channels = 2
+
+        
+        
             
         sum_time = np.sum(img, axis = 2)/img.shape[2]
     
@@ -458,7 +327,7 @@ class QFlowDataset(data.Dataset):
     
             Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
         
-            
+         
 
         return X,Y, mask_path
         
