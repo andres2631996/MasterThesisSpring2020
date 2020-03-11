@@ -73,10 +73,8 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
 
     net.train(True) # Must be enabled for dropout to be active
     
-    prev_dice = 0
+    prev_dice = 0 # Reference Dice to save model
     
-    
-    cont_load = 0 # Flag to load previous models
     
     # Possible optimizers. Betas should not have to be changed
     
@@ -117,18 +115,20 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     eval_metrics = [] # Stores dict of eval metrics from every [eval_frequency] step
     
-    train_metrics = [] # Stores dict of train metrics from every [eval_frequency] step
-    
     it = [] # Stores iteration indexes when network is evaluated
+    
+    it_loss = [] # Stores iteration indexes when loss is printed
     
     loss_print = [] # Average loss for printing
     
-    overall_results_train = [] # List with averaged train metrics results per fold
+    loss_print_std = [] # Standard deviation loss for printing
     
     overall_results_val = [] # List with averaged validation metrics results per fold
 
     
     i = 0
+    
+    cont_load = 0
     
     #listenPaus = subprocess.Popen(["python3", "./listenPaus.py"])
     
@@ -242,18 +242,48 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                 if params.lr_scheduling:
                     
                     scheduler.step()
+                    
+                # Loss printing
+                
+                if params.loss_frequency != -1 and loader_val != None and i % params.loss_frequency in range(batch_size) and i not in range(batch_size):
+
+                    print("Training iteration {}: loss: {} +- {}\n".format(i, np.mean(losses[-params.loss_frequency:-1]), np.std(losses[-params.loss_frequency:-1])))
+   
+                    loss_print.append(np.mean(losses[-params.loss_frequency:-1]))
+                    
+                    loss_print_std.append(np.std(losses[-params.loss_frequency:-1]))
+                    
+                    it_loss.append(i)
                 
                 #Evaluates the network
+
+                
+                #out = torch.argmax(output, 1)
+                
+                if cont_load == 0: # See if there is a previous model run and if so, load it
                     
-#                    if loader_val == None and i%eval_frequency in range(batch_size):
-#                        
-#                        print("Training iteration {}: loss: {}".format(i, losses[-1]))
-#                        
-#                        print("Elapsed training time: {}".format(time.time() - start_time))
+                    print('\nTry to load previous trained models\n')
+                    
+                    filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
+                    
+                    files_saved = os.listdir(params.network_data_path)
+                    
+                    if filename in files_saved: # Model has been already run with the same parameters
+                        
+                        # Load previous model
+                        
+                        net, optimizer, start_epoch, loss, best_dice = utilities.load_checkpoint(net, optimizer, 
+                                                                                                   params.network_data_path,
+                                                                                                   filename)
+
+
+                        prev_dice = best_dice
+                        
+                    cont_load = 1  
+                    
+                    
                 
-                
-                
-                if eval_frequency != -1 and loader_val != None and i % eval_frequency in range(batch_size) and i not in range(batch_size):
+                if (eval_frequency != -1 and loader_val != None and i % eval_frequency in range(batch_size) and i not in range(batch_size)) or (i == I - 1):
                     
                     #Evaluate a series of metrics at this point in training
                     
@@ -268,15 +298,17 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
 #                    plt.imshow(Ypart.cpu().numpy()[0,:,:], cmap = 'gray')
 #                    
 #                    plt.subplot(133)
+#                    
+#                    plt.imshow(out.cpu().detach().numpy()[0,:,:], cmap = 'gray')
                     
                     
-                    results_train = evaluate.evaluate(net, loader_train, i)
+                    #results_train = evaluate.evaluate(net, loader_train, i)
                     
                     results_eval = evaluate.evaluate(net, loader_val, i)
 
                     eval_metrics.append(results_eval)
                     
-                    train_metrics.append(results_train)
+                    #train_metrics.append(results_train)
                     
                     it.append(i)
                     
@@ -285,31 +317,6 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                     new_dice = float(results_eval[0][1][:-1])
                     
                     # Save the model if the validation score increases with respect to previous iterations
-                    
-                    if cont_load == 0:
-                    
-                        state = {'iteration': i + 1, 'state_dict': net.state_dict(),
-                                 'optimizer': optimizer.state_dict(), 'loss': loss, 
-                                 'best_dice': new_dice}
-                    
-                        filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
-                        
-                        files_saved = os.listdir(params.network_data_path)
-                        
-                        if filename in files_saved: # Model has been already run with the same parameters
-                            
-                            # Load previous model
-                            
-                            net, optimizer, start_epoch, loss, best_dice = utilities.load_checkpoint(net, optimizer, 
-                                                                                                       params.network_data_path,
-                                                                                                       filename)
-                            
-                            
-                            if best_dice > new_dice:
-
-                                prev_dice = best_dice
-                            
-                            cont_load = 1
                         
                     if new_dice > prev_dice:
                         
@@ -325,15 +332,11 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                     
                         prev_dice = new_dice
                     
-                    print("Training iteration {}: average loss: {}\n".format(i, np.mean(losses[-params.eval_frequency:-1])))
-                    
-                    loss_print.append(np.mean(losses[-params.eval_frequency:-1]))
                     
                     for l in range(len(results_eval)):
                         
-                        print("Training {}: {} +- {} / Validation {}: {} +- {}\n".
-                              format(results_train[l][0], results_train[l][1], results_train[l][2], 
-                                     results_eval[l][0], results_eval[l][1], results_eval[l][2]))
+                        print("Validation {}: {} +- {}\n".
+                              format(results_eval[l][0], results_eval[l][1], results_eval[l][2]))
 
                     print("Elapsed training time: {}\n".format(time.time() - start_time))
       
@@ -386,8 +389,6 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     # Remove one dimension from lists of results
 
     eval_metrics = list(itertools.chain.from_iterable(eval_metrics))
-    
-    train_metrics = list(itertools.chain.from_iterable(train_metrics))
 
     
     print("Elapsed training time: {}".format(time.time() - start_time))
@@ -412,7 +413,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     plt.figure(figsize = (13,5))
     
-    plt.plot(it,loss_print), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
+    plt.errorbar(it_loss,loss_print, yerr= loss_print_std), plt.xlabel('Iterations'), plt.ylabel(params.loss_fun + ' loss')
     
     plt.title('Evolution of ' + params.loss_fun + ' loss function, fold ' + str(k))
     
@@ -422,8 +423,6 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     # Set metric lists to array
     
-    train_metrics_array = np.array(train_metrics)
-    
     eval_metrics_array = np.array(eval_metrics)
 
 
@@ -431,12 +430,10 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     # Save evaluation and training metrics to TXT files
     
     np.savetxt(params.network_data_path + 'ValidationMetrics_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '.txt', eval_metrics_array, fmt = '%s')
-    
-    np.savetxt(params.network_data_path + 'TrainingMetrics_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '.txt', eval_metrics_array, fmt = '%s')
-    
+  
     # Get unique metrics names
     
-    metrics_unique = np.unique(train_metrics_array[:,0])
+    metrics_unique = np.unique(eval_metrics_array[:,0])
     
     # Apply a for loop for each metric type
     
@@ -444,30 +441,18 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
         
         metric_name = str(metric_name)
         
-        ind_metric = np.where(train_metrics_array[:,0] == metric_name)[0]
-
-        mean_metric_train = train_metrics_array[ind_metric,1]
+        ind_metric = np.where(eval_metrics_array[:,0] == metric_name)[0]
         
         mean_metric_eval = eval_metrics_array[ind_metric,1]
         
-        std_metric_train = train_metrics_array[ind_metric,2]
-        
         std_metric_eval = eval_metrics_array[ind_metric,2]
-        
-        
-        m_metric_train = []
-        
-        s_metric_train = []
+
         
         m_metric_eval = []
         
         s_metric_eval = []
         
-        for i in range(len(mean_metric_train)):
-            
-            m_metric_train.append(float(mean_metric_train[i][:-1]))
-            
-            s_metric_train.append(float(std_metric_train[i][:-1]))
+        for i in range(len(mean_metric_eval)):
             
             m_metric_eval.append(float(mean_metric_eval[i][:-1]))
             
@@ -476,8 +461,6 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
         
 
         fig = plt.figure(figsize = (13,5))
-        
-        plt.errorbar(it, m_metric_train, yerr =  s_metric_train, color ='b', label = 'Training')
         
         plt.errorbar(it, m_metric_eval, yerr =  s_metric_eval, color = 'r', label = 'Validation')
         
@@ -491,14 +474,10 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
         
         # Average result appending
         
-        overall_results_train.append(np.mean(m_metric_train))
+        overall_results_val.append(m_metric_eval[-1])
         
-        overall_results_train.append(np.mean(s_metric_train))
-        
-        overall_results_val.append(np.mean(m_metric_eval))
-        
-        overall_results_val.append(np.mean(s_metric_eval))
+        overall_results_val.append(s_metric_eval[-1])
 
     
-    return np.mean(losses[-params.eval_frequency:-1]), overall_results_train, overall_results_val, net.state_dict(), optimizer, optimizer.state_dict()
+    return np.mean(losses[-params.eval_frequency:-1]), np.std(losses[-params.eval_frequency:-1]), overall_results_val, net.state_dict(), optimizer, optimizer.state_dict()
 

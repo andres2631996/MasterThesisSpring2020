@@ -36,6 +36,10 @@ import train
 
 import models
 
+import vtk
+
+from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
+
 
 def preprocessingType(preprocessing):
         
@@ -110,6 +114,46 @@ def weights_init(m):
             torch.nn.init.zeros_(m.bias)
 
 
+def readVTK(filename, order='F'):
+        
+    """
+    Utility function to read vtk volume. 
+    
+    Params:
+        
+        - inherited from class (check at the beginning of the class)
+        - path: path where VTK file is located
+        - filename: VTK file name
+    
+    Returns:
+        
+        - numpy array
+        - data origin
+        - data spacing
+    
+    """
+
+    reader = vtk.vtkStructuredPointsReader()
+
+    reader.SetFileName(filename)
+
+    reader.Update()
+
+    image = reader.GetOutput()
+
+    numpy_array = vtk_to_numpy(image.GetPointData().GetScalars())
+
+    numpy_array = numpy_array.reshape(image.GetDimensions(),order='F')
+
+    numpy_array = numpy_array.swapaxes(0,1)
+
+    origin = list(image.GetOrigin())
+
+    spacing = list(image.GetSpacing())
+
+    return numpy_array, origin, spacing
+
+
 def extractVTKfilesStratification(patient_paths):
     
     """
@@ -129,27 +173,15 @@ def extractVTKfilesStratification(patient_paths):
 
     cont = 0
 
-
-    if 'both' in params.train_with:
-        
-        mag_paths = []
-        
-        mag_path = []
-        
-        pha_paths = []
-        
-        pha_path = []
     
-    else:
+    raw_paths = []
     
-        raw_paths = []
-        
-        raw_path = []
-    
+    raw_path = []
     
     mask_paths = []
     
     mask_path = []
+
     
     for fold in patient_paths:
         
@@ -167,36 +199,24 @@ def extractVTKfilesStratification(patient_paths):
                     
                     if params.train_with == 'bothBF':
                         
-                        ind_mag = [i for i,s in enumerate(images) if 'magBF' in s]
+                        ind_raw = [i for i,s in enumerate(images) if 'magBF' in s]
                     
                     elif params.train_with == 'both':
                         
-                        ind_mag = [i for i,s in enumerate(images) if 'mag_' in s]
-        
-                    ind_pha = [i for i,s in enumerate(images) if 'pha' in s]
-                    
-                    ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
-                    
-                    for ind_m, ind_p, ind_mk in zip(ind_mag, ind_pha, ind_msk):
-                        
-                        mag_path.append(patient_path + images[ind_m])
-                        
-                        pha_path.append(patient_path + images[ind_p])
-                        
-                        mask_path.append(patient_path + images[ind_mk])
-                    
+                        ind_raw = [i for i,s in enumerate(images) if 'mag_' in s]
                 
                 else:
                     
                     ind_raw = [i for i,s in enumerate(images) if params.train_with in s]
                     
-                    ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
+                ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
+                
+                for ind, ind_m in zip(ind_raw,ind_msk):
                     
-                    for ind, ind_m in zip(ind_raw,ind_msk):
-                        
-                        raw_path.append(patient_path + images[ind])
-                        
-                        mask_path.append(patient_path + images[ind_m])
+                    raw_path.append(patient_path + images[ind])
+                    
+                    mask_path.append(patient_path + images[ind_m])
+
             
             else:
                 
@@ -213,90 +233,61 @@ def extractVTKfilesStratification(patient_paths):
                     if params.train_with == 'mag_': 
                     
                         if modality == 'mag':
-                        
-                            raw_path.append(images)
+                            
+                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+
                     
                     elif params.train_with == 'pha':
                         
                         if modality == 'pha':
-                        
-                            raw_path.append(images)
+                            
+                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+
+
                     
                     elif params.train_with == 'magBF':
                         
                         if modality == 'magBF':
                             
-                            raw_path.append(images)
+                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+
                     
                     elif params.train_with == 'both':
                         
                         if modality == 'mag':
                             
-                            mag_path.append(images)
-                        
-                        elif modality == 'pha':
-                            
-                            pha_path.append(images)
+                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+
                         
                     elif params.train_with == 'bothBF':
                         
                         if modality == 'magBF':
                             
-                            mag_path.append(images)
-                        
-                        elif modality == 'pha':
-                            
-                            pha_path.append(images)
+                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+
                     
                     if modality == 'msk':
                         
-                        mask_path.append(images)
+                        mask_path.append([modality_path + image for image in images])
+                        
+                        
                     
         mask_path = list(itertools.chain.from_iterable(mask_path))            
-                    
-        if 'both' in params.train_with:
             
-            mag_path = list(itertools.chain.from_iterable(mag_path))
-            
-            pha_path = list(itertools.chain.from_iterable(pha_path))
-            
-            mag_paths.append(mag_path)
-            
-            pha_paths.append(pha_path)
-            
-            mask_paths.append(mask_path)
-            
-            mag_path = []
-            
-            pha_path = []
-            
-            mask_path = []
-    
-        else:
-            
-            raw_path = list(itertools.chain.from_iterable(raw_path))
-            
-            raw_paths.append(raw_path)
-                
-            mask_paths.append(mask_path)
-            
-            raw_path = []
+        raw_path = list(itertools.chain.from_iterable(raw_path))
         
-            mask_path = []
+        raw_paths.append(raw_path)
+            
+        mask_paths.append(mask_path)
+        
+        raw_path = []
+    
+        mask_path = []
     
         cont += 1
     
-    if 'both' in params.train_with:
         
-        raw_paths = np.array([mag_paths, pha_paths])
-        
-        return raw_paths, mask_paths
-    
-    else:
-        
-        raw_paths = np.expand_dims(np.array(raw_paths),0)
-        
-        return raw_paths, mask_paths
+    return raw_paths, mask_paths
     
     
 def pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths):
@@ -322,84 +313,44 @@ def pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths):
 
     """    
     
-    val_raw_paths = r_paths[:,k].tolist() # List with patient paths for validation
+    val_raw_paths = r_paths[k] # List with patient paths for validation
     
     val_mask_paths = m_paths[k]
     
     val_patients = patient_paths[k]
+
     
     if k == 0: # First fold 
+
+        train_mask_paths = list(itertools.chain.from_iterable(m_paths[1:]))
         
-        train_raw_paths = r_paths[:,1:].tolist()      #r_paths[:,0].tolist(), m_paths[0]
-    
-        train_mask_paths = m_paths[1:]
+        train_raw_paths = list(itertools.chain.from_iterable(r_paths[1:]))
         
-        train_mask_paths = list(itertools.chain.from_iterable(train_mask_paths))
-        
-        train_patients = patient_paths[1:]
-        
-        train_patients = list(itertools.chain.from_iterable(train_patients))
-        
-        train_raw_paths_both = []
-        
-        for i in range(len(train_raw_paths)):
-            
-            train_raw_paths_both.append(list(itertools.chain.from_iterable(train_raw_paths[i])))
+        train_patients = list(itertools.chain.from_iterable(patient_paths[1:]))
+
+
     
     elif k == K - 1: # Last fold
         
-        train_raw_paths = r_paths[:,:-1].tolist()      #r_paths[:,0].tolist(), m_paths[0]
-    
-        train_mask_paths = m_paths[:-1]
+        train_mask_paths = list(itertools.chain.from_iterable(m_paths[:-1]))
         
-        train_mask_paths = list(itertools.chain.from_iterable(train_mask_paths))
+        train_raw_paths = list(itertools.chain.from_iterable(r_paths[:-1]))
         
-        train_patients = patient_paths[:-1]
+        train_patients = list(itertools.chain.from_iterable(patient_paths[:-1]))
+
         
-        train_patients = list(itertools.chain.from_iterable(train_patients))
-        
-        train_raw_paths_both = []
-        
-        for i in range(len(train_raw_paths)):
-            
-            train_raw_paths_both.append(list(itertools.chain.from_iterable(train_raw_paths[i])))
     
     else: # Intermediate folds
-        
-        train_raw_paths_before = r_paths[:,:k].tolist()      #r_paths[:,0].tolist(), m_paths[0]
-        
+
         train_patients = list(itertools.chain.from_iterable(patient_paths[:k] + patient_paths[(k + 1):]))
         
-        train_raw_paths_both_before = []
+        train_mask_paths = list(itertools.chain.from_iterable(m_paths[:k] + m_paths[(k+1):]))
         
-        for i in range(len(train_raw_paths_before)):
-            
-            train_raw_paths_both_before.append(list(itertools.chain.from_iterable(train_raw_paths_before[i])))
-            
-        
-        train_raw_paths_after = r_paths[:,(k + 1):].tolist()      #r_paths[:,0].tolist(), m_paths[0]
-        
-        train_raw_paths_both_after = []
-        
-        for i in range(len(train_raw_paths_after)):
-            
-            train_raw_paths_both_after.append(list(itertools.chain.from_iterable(train_raw_paths_after[i])))
-            
-        
-        
-        train_raw_paths_both = []
-        
-        for i in range(len(train_raw_paths_before)):
-            
-            train_raw_paths_both.append(list(itertools.chain.from_iterable(train_raw_paths_before[i] + train_raw_paths_after[i])))
-        
-        
-        train_mask_paths = m_paths[:k] + m_paths[(k+1):] # List with patient paths for training
-        
-        train_mask_paths = list(itertools.chain.from_iterable(train_mask_paths))
+        train_raw_paths = list(itertools.chain.from_iterable(r_paths[:k] + r_paths[(k+1):]))
+
         
     
-    return train_raw_paths_both, train_mask_paths, val_raw_paths, val_mask_paths, train_patients, val_patients
+    return train_raw_paths, train_mask_paths, val_raw_paths, val_mask_paths, train_patients, val_patients
     
     
 
@@ -445,8 +396,8 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
         
         test = False 
     
-        train_dataset = QFlowDataset(train_raw_paths, train_mask_paths, train, params.train_with,
-                                     params.three_D, params.augmentation)
+        train_dataset = QFlowDataset(train_raw_paths, train_mask_paths,
+                                     train, params.train_with,params.three_D, params.augmentation)
         
         
         
@@ -598,6 +549,8 @@ curr_date = datetime.datetime.now().date()
 
 losses = []
 
+losses_std = []
+
 metrics_train_array = np.zeros((params.k, 2, len(params.metrics)))
 
 metrics_val_array = np.zeros((params.k, 2, len(params.metrics)))
@@ -635,136 +588,111 @@ for k in range(K):
     
     
     train_raw_path, train_mask_path, val_raw_path, val_mask_path, train_patients, val_patients = pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths)
-#    
-#            
-#    # Training and validation data loaders
-#
-#    loader_train, loader_val = get_data_loader(train_raw_path, train_mask_path, k, K, 
-#                                                data_path, val_raw_path, val_mask_path, 
-#                                                train_patients, val_patients)
-#    
-#    
-#    # Train and evaluate
-#    
-#    print("\nStart training network, fold " + str(k) + "...\n")
-#
-#    loss, metrics_train, metrics_val, model_state, optimizer, optimizer_state = train.train(net, loader_train, loader_val, 
-#                                                                                            k, params.eval_frequency, 
-#                                                                                            params.I)
-#    
-#    
-#    # Save model and optimizer for later inference
-#    
-#    utilities.model_saving(model_state, optimizer_state, params.network_data_path, 'FinalTrainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar')
-#    
-#    losses.append(loss)
-#
-#    cont_train_result = 0
-#    
-#    cont_val_result = 0
-#    
-#    for i in range(len(params.metrics)):
-#        
-#        # Store arrays with mean and standard deviation results
-#        
-#        metrics_train_array[k,:,i] = np.array([metrics_train[cont_train_result], metrics_train[cont_train_result + 1]])
-#        
-#        cont_train_result += 2
-#        
-#        metrics_val_array[k,:,i] = np.array([metrics_val[cont_val_result], metrics_val[cont_val_result + 1]])
-#        
-#        cont_val_result += 2
-#    
-#     #Prints time estimate
-#     
-#    pred_time_seconds = (time.time()-starting_time)*K/(k+1)
-#     
-#    ETA = (datetime.datetime(curr_date.year,
-#        curr_date.month,
-#        curr_date.day,
-#        curr_time.hour, 
-#        curr_time.minute, 
-#        curr_time.second) + datetime.timedelta(seconds = pred_time_seconds)).strftime("%Y-%m-%d %H:%M:%S")
-#    
-#    print("Estimated time of Arrival: ", ETA)  
-#
-#
-#
-## Print cross-validation results and show figures
-#        
-#mean_loss = np.mean(np.array(losses))
-#
-#std_loss = np.std(np.array(losses))
-#
-#print('\nFinal {} loss over folds: {} +- {}\n'.format(params.loss_fun, mean_loss, std_loss))
-#
-#fig = plt.figure(figsize = (13,5))
-#
-#plt.bar(np.arange(1,K + 1),losses, color = 'b')
-#
-#plt.title(params.loss_fun + ' loss over folds')
-#
-#plt.xlabel('Fold number')
-#
-#plt.ylabel(params.loss_fun + ' loss')
-#
-#fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
-#
-#
-#
-#    
-#for i in range(len(params.metrics)):
-#    
-#    mean_train = np.mean(metrics_train_array[:,0,i].flatten())
-#
-#    std_train = np.std(metrics_train_array[:,0,i].flatten())
-#    
-#    mean_val = np.mean(metrics_val_array[:,0,i].flatten())
-#
-#    std_val = np.std(metrics_val_array[:,0,i].flatten())
-#    
-#    print('Final {} over training folds: {} +- {}\n'.format(params.metrics[i], mean_train, std_train))
-#    
-#    print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
-#    
-#    # Show in figures cross-validation results, too
-#    
-#    # Results for training
-#       
-#    fig = plt.figure(figsize = (13,5))
-#
-#    plt.bar(np.arange(1,K + 1), metrics_train_array[:,0,i], color = 'b', yerr = metrics_train_array[:,1,i])
-#    
-#    plt.title(str(params.metrics[i]) + ' over training folds')
-#    
-#    plt.xlabel('Fold number')
-#    
-#    plt.ylabel(str(params.metrics[i]))
-#    
-#    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_training_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
-#    
-#    
-#    # Results for validation
-#    
-#    fig = plt.figure(figsize = (13,5))
-#
-#    plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
-#    
-#    plt.title(str(params.metrics[i]) + ' over validation folds')
-#    
-#    plt.xlabel('Fold number')
-#    
-#    plt.ylabel(str(params.metrics[i]))
-#    
-#    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+    
+            
+    # Training and validation data loaders
+
+    loader_train, loader_val = get_data_loader(train_raw_path, train_mask_path, k, K, 
+                                                data_path, val_raw_path, val_mask_path, 
+                                                train_patients, val_patients)
+    
+    
+    # Train and evaluate
+    
+    print("\nStart training network, fold " + str(k) + "...\n")
+
+    loss, loss_std, metrics_val, model_state, optimizer, optimizer_state = train.train(net, loader_train, loader_val, 
+                                                                                            k, params.eval_frequency, 
+                                                                                            params.I)
+    
+    
+    # Save model and optimizer for later inference
+    
+    utilities.model_saving(model_state, optimizer_state, params.network_data_path, 'FinalTrainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar')
+    
+    losses.append(loss)
+    
+    losses_std.append(loss_std)
+    
+    cont_val_result = 0
+    
+    for i in range(len(params.metrics)):
+        
+        # Store arrays with mean and standard deviation results
+        
+        metrics_val_array[k,:,i] = np.array([metrics_val[cont_val_result], metrics_val[cont_val_result + 1]])
+        
+        cont_val_result += 2
+    
+     #Prints time estimate
+     
+    pred_time_seconds = (time.time()-starting_time)*K/(k+1)
+     
+    ETA = (datetime.datetime(curr_date.year,
+        curr_date.month,
+        curr_date.day,
+        curr_time.hour, 
+        curr_time.minute, 
+        curr_time.second) + datetime.timedelta(seconds = pred_time_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+    
+    print("Estimated time of Arrival: ", ETA)  
+
+
+
+# Print cross-validation results and show figures
+        
+mean_loss = np.mean(np.array(losses))
+
+std_loss = np.std(np.array(losses))
+
+print('\nFinal {} loss over folds: {} +- {}\n'.format(params.loss_fun, mean_loss, std_loss))
+
+fig = plt.figure(figsize = (13,5))
+
+plt.bar(np.arange(1,K + 1),losses, color = 'b', yerr = losses_std)
+
+plt.title(params.loss_fun + ' loss over folds')
+
+plt.xlabel('Fold number')
+
+plt.ylabel(params.loss_fun + ' loss')
+
+fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+
+
+
+    
+for i in range(len(params.metrics)):
+    
+    mean_val = np.mean(metrics_val_array[:,0,i].flatten())
+
+    std_val = np.std(metrics_val_array[:,0,i].flatten())
+    
+    print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
+    
+    # Show in figures cross-validation results, too
+    
+    # Results for validation
+    
+    fig = plt.figure(figsize = (13,5))
+
+    plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
+    
+    plt.title(str(params.metrics[i]) + ' over validation folds')
+    
+    plt.xlabel('Fold number')
+    
+    plt.ylabel(str(params.metrics[i]))
+    
+    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
     
 
     
 #t1 = time.time()
 #    
-#dataset = QFlowDataset(r_paths[:,3].tolist(), m_paths[3], True, params.train_with, params.three_D, params.augmentation)
+#dataset = QFlowDataset(r_paths[3], m_paths[3], names[3], True, params.train_with, params.three_D, params.augmentation)
 #
-#test_loader = torch.utils.data.DataLoader(dataset, batch_size = 1, num_workers = 0, shuffle=True)
+#test_loader = torch.utils.data.DataLoader(dataset, batch_size = 1, num_workers = 0)
 #
 #for i,images in enumerate(test_loader):
 #    
@@ -775,34 +703,35 @@ for k in range(K):
 #test_images = images # Test images
 #
 #t2 = time.time()
-#
+##
 #print(t2-t1)
-###
-###x = np.squeeze(test_images[0].numpy())
-###
-###y = np.squeeze(test_images[1].numpy())
-###
+#
+##x = np.squeeze(test_images[0].numpy())
+##
+##y = np.squeeze(test_images[1].numpy())
+#
 #x = test_images[0].numpy()
 #
 #y = test_images[1].numpy()
 #
-#print(x.shape, y.shape)
-##
-##center = y.shape[-1]//2
-##
-#plt.figure(figsize = (13,5))
+##print(x.shape, y.shape)
+#
+#center = y.shape[-1]//2
+###
+#plt.figure(figsize = (13, 5))
 #
 #plt.subplot(131)
 #
-#plt.imshow(x[0,0,:,:], cmap = 'gray'), plt.colorbar()
+#plt.imshow(x[0,0,:,:], cmap = 'gray'), plt.axis('off')
 #
 #plt.subplot(132)
 #
-#plt.imshow(y[0,:,:], cmap = 'gray'), plt.colorbar()
+#plt.imshow(x[0,1,:,:], cmap = 'gray'), plt.axis('off')
 #
 #plt.subplot(133)
 #
-#plt.imshow(x[0,0,:,:]*y[0,:,:], cmap = 'gray'), plt.colorbar()
+#plt.imshow(y[0,:,:], cmap = 'gray'), plt.axis('off')
+
 
 #
 #plt.subplot(143)

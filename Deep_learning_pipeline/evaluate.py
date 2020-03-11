@@ -29,6 +29,8 @@ import math
 import matplotlib.pyplot as plt
 
 
+    
+    
 class Dice():
     
     """
@@ -64,9 +66,7 @@ class Dice():
         denominator += float(torch.add(torch.sum(self.ground_truth), torch.sum(self.prediction)))
         
         return (2*numerator/(denominator + 0.000000001))
-    
-    
-    
+   
 
 
 class Precision():
@@ -308,7 +308,7 @@ def evaluate(net, loader, iteration):
         
         batch_gpu = params.batch_GPU
         
-        batch_size = params.batch_size
+        ram_batch_size = params.RAM_batch_size
         
         metrics = params.metrics
         
@@ -320,13 +320,12 @@ def evaluate(net, loader, iteration):
         
         results = [] # List with overall results: METRIC NAME, MEAN AND STD!!
 
-        for X, Y, name in loader:
+        for X, Y, _ in loader:
             
             # Extracts the data from dataloader and puts it into the network
+
             
-            for i in range(int(X.shape[0]/batch_size)):
-            
-#            for i in range(min(math.ceil(ram_batch_size/batch_gpu_max), math.ceil(X.shape[0]/batch_gpu_max))):
+            for i in range(min(math.ceil(ram_batch_size/batch_gpu_max), math.ceil(X.shape[0]/batch_gpu_max))):
                 
                 startIndiex = i*batch_gpu_max
                 
@@ -347,12 +346,10 @@ def evaluate(net, loader, iteration):
                     y_part = Y[startIndiex:stopYIndex,:,:].cuda()
 
                 
-                output = net(x_part).data #Run the samples though the network and get the predictions 
+                output = net(x_part).data #Run the samples though the network and get the predictions
                 
                 output = torch.argmax(output, 1).cuda() #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
-                
-                
-                t1 = time.time()
+
                 
                 for j in range(x_part.shape[0]):
                     
@@ -363,8 +360,7 @@ def evaluate(net, loader, iteration):
                             dice = Dice(y_part, output)
                             
                             dices.append(dice.online())
-                        
-                        
+
                         elif metric == 'Precision' or metric == 'PRECISION' or metric == 'precision':
                             
                             prec = Precision(y_part, output)
@@ -384,11 +380,7 @@ def evaluate(net, loader, iteration):
                             print('Unspecified metric. Please provide an adequate metric (Dice/Precision/Recall)\n')
                             
                             exit()
-                            
-                t2 = time.time()
-                
-                print(t2-t1)
-                        
+
                             
         if ('Dice' in metrics) or ('dice' in metrics) or ('DICE' in metrics):
             

@@ -16,10 +16,6 @@ import os
 
 import params
 
-import vtk
-
-from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
-
 import time
 
 import cv2
@@ -33,6 +29,7 @@ class Augmentations2D:
         self.img = img
         
         self.mask = mask
+
         
         
     def augment_slices(self,aug, data):
@@ -74,61 +71,30 @@ class Augmentations2D:
                 )
         
         
-    
+        img_aux = self.img[:,:,:self.img.shape[-1]//2]
         
-        mask_new = np.zeros((self.mask.shape[0], self.mask.shape[1], 1 + self.sum_t.shape[2]))
+        sum_t = self.img[:,:,self.img.shape[-1]//2:]
+        
+        mask_new = np.zeros((self.mask.shape[0], self.mask.shape[1], 1 + sum_t.shape[2]))
         
         mask_new[:,:,0] = self.mask
         
-        mask_new[:,:,1:] = self.sum_t
+        mask_new[:,:,1:] = sum_t
         
-        data = {"image": self.img, "mask": mask_new}
+        data = {"image": img_aux, "mask": mask_new}
 
         
         img, mask, sum_t = self.augment_slices(augmentation_pipeline, data)
+        
+        img_final = np.zeros(self.img.shape)
+        
+        img_final[:,:,:self.img.shape[-1]//2] = img
+        
+        img_final[:,:,self.img.shape[-1]//2:] = sum_t
 
         
-        return img, mask, sum_t
+        return img_final, mask
     
-
-def readVTK(filename, order='F'):
-            
-    """
-    Utility function to read vtk volume. 
-    
-    Params:
-        
-        - inherited from class (check at the beginning of the class)
-        - path: path where VTK file is located
-        - filename: VTK file name
-    
-    Returns:
-        
-        - numpy array
-        - data origin
-        - data spacing
-    
-    """
-
-    reader = vtk.vtkStructuredPointsReader()
-
-    reader.SetFileName(filename)
-
-    reader.Update()
-
-    image = reader.GetOutput()
-
-    numpy_array = vtk_to_numpy(image.GetPointData().GetScalars())
-
-    numpy_array = numpy_array.reshape(image.GetDimensions(),order='F')
-
-    numpy_array = numpy_array.swapaxes(0,1)
-
-    origin = list(image.GetOrigin())
-
-    spacing = list(image.GetSpacing())
-
-    return numpy_array, origin, spacing
 
 
 
