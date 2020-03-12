@@ -334,10 +334,10 @@ def model_loading(model, optimizer, path, filename):
     file = path + filename
     
     files = os.listdir(path)
-    
+
     if os.path.exists(path):
     
-        if file in files:
+        if filename in files:
             
             print("=> loading model '{}'".format(filename))
             

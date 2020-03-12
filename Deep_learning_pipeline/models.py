@@ -106,7 +106,7 @@ class Res_Down(nn.Module):
             
         self.bn1 = EncoderNorm_2d(out_chan)
             
-        self.drop = nn.Dropout2d(params.dropout)
+        #self.drop = nn.Dropout2d(params.dropout)
 
         self.conv2 = nn.Conv2d(out_chan, out_chan, kernel, padding=padding)
         
@@ -118,7 +118,7 @@ class Res_Down(nn.Module):
 
     def forward(self, x):
         
-        x = self.drop(F.relu(self.bn1(self.conv1(x))))
+        x = F.relu(self.bn1(self.conv1(x)))
         
         out = self.bn2(self.conv2(x))
 
@@ -156,8 +156,6 @@ class Res_Up(nn.Module):
                 padding=padding)
         
         self.bn1 = EncoderNorm_2d(out_chan)
-        
-        self.drop = nn.Dropout2d(params.dropout)
 
         self.conv2 = nn.Conv2d(out_chan, out_chan, 3, padding=padding)
         
@@ -166,7 +164,7 @@ class Res_Up(nn.Module):
 
     def forward(self, x):
         
-        x = self.drop(F.relu(self.bn1(self.conv1(x))))
+        x = F.relu(self.bn1(self.conv1(x)))
         
         out = self.bn2(self.conv2(x))
 
@@ -203,7 +201,7 @@ class Res_Final(nn.Module):
         
         self.bn1 = EncoderNorm_2d(in_chan)
         
-        self.drop = nn.Dropout2d(params.dropout)
+        #self.drop = nn.Dropout2d(params.dropout)
 
         self.conv2 = nn.Conv2d(in_chan, out_chan, 1)
         
@@ -212,7 +210,7 @@ class Res_Final(nn.Module):
 
     def forward(self, x):
         
-        out = self.drop(F.relu(self.bn1(self.conv1(x))))
+        out = F.relu(self.bn1(self.conv1(x)))
         
         out = self.conv2(x + out)
 
@@ -276,15 +274,15 @@ class UNet_with_Residuals(nn.Module):
 
     def forward(self, x):
         
-        out = self.drop(F.relu(self.bn1(self.conv1(x))))
+        out = F.relu(self.bn1(self.conv1(x)))
         
         e0 = F.relu(self.bn2(self.conv2(out)))
         
 
 
         e1 = self.Rd1(e0)
-        e2 = self.Rd2(e1)
-        e3 = self.Rd3(e2)
+        e2 = self.drop(self.Rd2(e1))
+        e3 = self.drop(self.Rd3(e2))
         #e4 = self.Rd4(e3)
             
         

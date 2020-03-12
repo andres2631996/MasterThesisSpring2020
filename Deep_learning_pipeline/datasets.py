@@ -51,8 +51,8 @@ class QFlowDataset(data.Dataset):
         
         - mask_paths: ground truth files
         
-        - train: if the dataset is used for training (True) or for validation 
-                 (False)
+        - train: if the dataset is used for training (True) or for validation or
+                 testing (False)
                  
         - work_with: type of images to work with ('mag'/'pha'/'magBF'/'both'/'bothBF')
         
@@ -86,7 +86,7 @@ class QFlowDataset(data.Dataset):
 #        
     def __len__(self):
         
-        return len(self.mask_paths)
+        return len(self.img_paths)
     
     
     def readVTK(self, filename, order='F'):
@@ -161,29 +161,39 @@ class QFlowDataset(data.Dataset):
         
         # Check that the files read coincide
         
-        coincide = 0 # Coincidence flag
+        coincide = 1 # Coincidence flag
         
         ind = index
-
-        mask_path = self.mask_paths[ind]
         
         raw_path = self.img_paths[ind]
+        
+        if len(self.mask_paths) != 0:
 
+            mask_path = self.mask_paths[ind]
         
-        # Make sure that raw and mask files are coincident
+            # Make sure that raw and mask files are coincident
         
-        if mask_path.replace('msk', 'pha') == raw_path or mask_path.replace('msk', 'mag') == raw_path or mask_path.replace('msk', 'magBF') == raw_path:
+            if mask_path.replace('msk', 'pha') == raw_path or mask_path.replace('msk', 'mag') == raw_path or mask_path.replace('msk', 'magBF') == raw_path:
+                
+                coincide = 1
+                
+                mask_array, _, _ = self.readVTK(mask_path)
+                
+                if not(params.three_D):
+                    
+                    mask_array = mask_array[:,:,0]
+                    
+                    
+                Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
             
-            coincide = 1
-        
-        
-        else:
             
-            coincide = 0
-            
-            print('Raw files and ground truths are not correspondent\n')
-            
-            exit()
+            else:
+                
+                coincide = 0
+                
+                print('Raw files and ground truths are not correspondent\n')
+                
+                exit()
 
         
         if coincide == 1:
@@ -210,21 +220,17 @@ class QFlowDataset(data.Dataset):
                 else:
                     
                     channels = 2 # Magnitude/phase + sum of all magnitudes/phases in time
-            
-            
-            mask_array, _, _ = self.readVTK(mask_path)
-            
+
+ 
             raw,_,_ = self.readVTK(raw_path)
             
             if not(params.three_D): # 2D VTK files only have one slice in T
                 
-                mask_array = mask_array[:,:,0]
-                
-                img = np.zeros((mask_array.shape[0], mask_array.shape[1], channels))
+                img = np.zeros((raw.shape[0], raw.shape[1], channels))
             
             else:
             
-                img = np.zeros((mask_array.shape[0], mask_array.shape[1], mask_array.shape[2],channels))
+                img = np.zeros((raw.shape[0], raw.shape[1], raw.shape[2],channels))
             
             if not('both' in params.train_with):
                 
@@ -234,9 +240,9 @@ class QFlowDataset(data.Dataset):
                 
                 else:
                     
-                    img[:,:,0] = raw
+                    img[:,:,0] = raw[:,:,0]
                     
-                    sum_t = self.sumTime(name)
+                    sum_t = self.sumTime(raw_path)
                     
                     img[:,:,1] = sum_t
     
@@ -299,8 +305,6 @@ class QFlowDataset(data.Dataset):
         
         
             X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float()
-            
-            Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
         
             if not(self.threeD):
                 
@@ -309,9 +313,15 @@ class QFlowDataset(data.Dataset):
             else:
                 
                 X = X.permute(-1,0,1,2) # Channels first
-        
-        
-            return X,Y, mask_path
+            
+            
+            if len(self.mask_paths) != 0:
+
+                return X,Y, mask_path
+            
+            else:
+                
+                return X, raw_path
         
 
         

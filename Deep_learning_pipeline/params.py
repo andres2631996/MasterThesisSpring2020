@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Mar  2 11:34:14 2020
-
-@author: andres
-"""
-
 import math
 
 import numpy as np
@@ -43,7 +35,7 @@ studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
 prep_step = 'raw' # Level of preprocessing to apply for images to the network
 
-train_with = 'bothBF' # Type of images to train with
+train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
@@ -54,13 +46,13 @@ channel_count = 1 # Channel counter
 
 augmentation = True
 
-augm_params = [0.15, 0.5, 30] # Augmentation limit parameters: maximum mean noise amplitude, maximum scale and maximum degree rotation
+augm_params = [0.15, 0.9, 15] # Augmentation limit parameters: maximum mean noise amplitude, maximum scale and maximum degree rotation
 
 augm_probs = [0.5]*5 # Probabilities for each augmentation event
 
 # Optional 2D augmentation with albumentations
 
-augm2D_limits = [0.5, 45] # Augmentation limit parameters: contrast, Brightness, Scale, Rotation, Flip, Elastic Deformation
+augm2D_limits = [0.9, 15] # Augmentation limit parameters: contrast, Brightness, Scale, Rotation, Flip, Elastic Deformation
 
 augm2D_probs = [0.5]*3
 
@@ -118,13 +110,14 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 100000
+I = 75000
 
 # How often the model will be evaluated
+# During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*10000
+eval_frequency = batch_size*5000
 
-loss_frequency = 1000 # How often the loss function average value is printed on screen
+loss_frequency = batch_size*1000
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 
@@ -132,7 +125,7 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.00001 # Learning rate
+lr = 0.000001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
@@ -146,7 +139,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal_tversky' # Loss function type. Can be dice, generalized_dice, focal, focal_tversky, exp_log, bce or bce_dice loss
+loss_fun = 'tversky' # Loss function type. Can be dice, generalized_dice, focal, tversky, focal_tversky, exp_log, bce or bce_dice loss
 
 loss_beta = 0.3
 

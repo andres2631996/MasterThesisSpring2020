@@ -555,6 +555,8 @@ metrics_train_array = np.zeros((params.k, 2, len(params.metrics)))
 
 metrics_val_array = np.zeros((params.k, 2, len(params.metrics)))
 
+print('Dropout applied: {}'.format(params.dropout))
+
     
 
 for k in range(K):

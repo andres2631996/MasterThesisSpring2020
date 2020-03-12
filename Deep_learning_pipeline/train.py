@@ -277,7 +277,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                                                                                                    filename)
 
 
-                        prev_dice = best_dice
+                        #prev_dice = best_dice RE-ACTIVATE ON FRIDAY!!!!
                         
                     cont_load = 1  
                     

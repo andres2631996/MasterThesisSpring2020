@@ -61,11 +61,11 @@ class testing:
     
     Params:
         
-        - img_filename: filename(s) of image to test  [magnitude, phase]
+        - img_filename: list of filename(s) of image to test [magnitude]/[phase]/[magnitude, phase]
         
         - img_path: folder where image, phase file and mask are located
         
-        - mask_filename: corresponding mask filename (None if not available)
+        - mask_filename: corresponding list of mask filenames (None if not available)
         
         - pha_filename: corresponding phase filename
         
@@ -219,7 +219,7 @@ class testing:
             print('\nOperation aborted\n')
     
     
-    def Segmentation(self, X, out, Y, origin, spacing):
+    def Segmentation(self, X, out, Y, origin, spacing, img_filename):
     
         """
         Provide a segmentation VTK file with testing results of mask overlapped
@@ -246,7 +246,7 @@ class testing:
         
         """
         
-        final_result = np.zeros((X.shape[2], X.shape[3], X.shape[4], 3))
+        final_result = np.zeros((X.shape[0], X.shape[1], X.shape[2], 3))
         
         
         if Y is not None:
@@ -256,9 +256,12 @@ class testing:
         
         for i in range(final_result.shape[-1]):
             
-            final_result[:,:,:,i] = 255.0*(X-np.amin(X))/(np.amax(X)-np.amin(X)) # Grayscale values from 0 to 255
+            final_result[:,:,:,i] = np.round(255*(X-np.amin(X))/(np.amax(X)-np.amin(X))) # Grayscale values from 0 to 255
         
-    
+            final_result[:,:,:,i].astype(int)
+        
+        plt.imshow(final_result[:,:,0,0], cmap = 'gray'), plt.colorbar()
+        
         # If no mask available, leave segmented result in green
         
         if Y is None:
@@ -301,7 +304,7 @@ class testing:
         
         ind_blue = np.where(total == 3)
         
-        final_result[ind_red,0]  = 255.0
+        final_result[ind_red,0]  = 255
         
         final_result[ind_red,1] = 0
         
@@ -309,7 +312,7 @@ class testing:
         
         final_result[ind_green,0]  = 0
         
-        final_result[ind_green,1] = 255.0
+        final_result[ind_green,1] = 255
         
         final_result[ind_green,2] = 0
         
@@ -317,25 +320,30 @@ class testing:
         
         final_result[ind_blue,1] = 0
         
-        final_result[ind_blue,2] = 255.0
+        final_result[ind_blue,2] = 255
+        
+        print(np.amax(final_result), np.amin(final_result))
         
         if 'pha' in params.train_with:
         
-            filename = self.img_filename[0].replace('pha','seg')
+            filename = img_filename[0].replace('pha','seg')
         
         elif not('pha' in params.train_with) and not('BF' in params.train_with):
             
-            filename = self.img_filename[0].replace('mag','seg')
+            filename = img_filename[0].replace('mag','seg')
         
         elif not('pha' in params.train_with) and ('BF' in params.train_with):
             
-            filename = self.img_filename[0].replace('magBF','seg')
+            filename = img_filename[0].replace('magBF','seg')
+        
+        
+        
         
         self.array2vtk(final_result, filename, origin, spacing)
     
     
     
-    def MIP(self, X, out, Y):
+    def MIP(self, X, out, Y, img_filename):
         
         """
         Provide a MIP image with found result.
@@ -357,7 +365,7 @@ class testing:
         
         """
         
-        final_result = np.zeros((X.shape[2], X.shape[3], X.shape[4], 3))
+        final_result = np.zeros((X.shape[0], X.shape[1], X.shape[2], 3))
         
         
         if Y is not None:
@@ -367,7 +375,7 @@ class testing:
         
         for i in range(final_result.shape[-1]):
             
-            final_result[:,:,:,i] = 255.0*(X-np.amin(X))/(np.amax(X)-np.amin(X)) # Grayscale values from 0 to 255
+            final_result[:,:,:,i] = 255*(X-np.amin(X))/(np.amax(X)-np.amin(X)).astype(int) # Grayscale values from 0 to 255
         
     
         # If no mask available, leave segmented result in green
@@ -412,7 +420,7 @@ class testing:
         
         ind_blue = np.where(total == 3)
         
-        final_result[ind_red,0]  = 255.0
+        final_result[ind_red,0]  = 255
         
         final_result[ind_red,1] = 0
         
@@ -420,7 +428,7 @@ class testing:
         
         final_result[ind_green,0]  = 0
         
-        final_result[ind_green,1] = 255.0
+        final_result[ind_green,1] = 255
         
         final_result[ind_green,2] = 0
         
@@ -428,23 +436,23 @@ class testing:
         
         final_result[ind_blue,1] = 0
         
-        final_result[ind_blue,2] = 255.0
+        final_result[ind_blue,2] = 255
         
         if 'pha' in params.train_with:
         
-            filename = self.img_filename[0].replace('pha','seg')
+            filename = img_filename[0].replace('pha','seg')
             
             filename = filename.replace('vtk','png')
         
         elif not('pha' in params.train_with) and not('BF' in params.train_with):
             
-            filename = self.img_filename[0].replace('mag','seg')
+            filename = img_filename[0].replace('mag','seg')
             
             filename = filename.replace('vtk','png')
         
         elif not('pha' in params.train_with) and ('BF' in params.train_with):
             
-            filename = self.img_filename[0].replace('magBF','seg')
+            filename = img_filename[0].replace('magBF','seg')
             
             filename = filename.replace('vtk','png')
             
@@ -452,7 +460,7 @@ class testing:
         
         for i in range(final_result.shape[-1]):
             
-            mip_result[:,:,i] = final_result.max(final_result[:,:,:,i], axis = -1)
+            mip_result[:,:,i] = np.max(final_result[:,:,:,i], axis = -1)
             
         png.from_array(mip_result, mode = 'RGB').save(self.dest_path + filename)    
         
@@ -460,32 +468,51 @@ class testing:
     
         
     
-    def extractTensors(self):
+    def extractTensors(self, img_filename, mask_filename):
+        
+        """
+        Provide torch tensors with data. If the evaluation is in 2D, a list
+        with the sums of the frames along time is outputted, too
+        
+        """
         
         img_arrays = []
         
         sum_t_list = []
         
-        for i in range(len(self.img_filename)):
+        for i in range(len(img_filename)):
             
             # Load images
             
             # Extract numpy array from image and mask filenames
         
-            img_array, origin, spacing = self.readVTK(self.img_filename[i])
+            img_array, origin, spacing = self.readVTK(img_filename[i])
             
             img_arrays.append(img_array)
             
-            if sel
+            if not(params.three_D):
         
-            sum_t_list.append(np.sum(img_array, axis = -1))
-        
+                sum_t_list.append(np.sum(img_array, axis = -1))
+            
+            
         
         # Adjust to adequate tensor dimensions
-            
-        img = np.zeros((1,img_array.shape[0], img_array.shape[1], img_array.shape[2], len(img_arrays)))
         
-        for i in range(len(self.img_filename)):
+        # Compute number of channels
+        
+            
+        if 'both' in params.train_with:
+            
+            channels = 2
+        
+        else:
+            
+            channels = 1
+                
+            
+        img = np.zeros((1,img_array.shape[0], img_array.shape[1], img_array.shape[2], channels))
+        
+        for i in range(len(img_filename)):
             
             img[:,:,:,:,i] = img_arrays[i]
             
@@ -499,7 +526,7 @@ class testing:
 
             # Load mask array
 
-            mask_array, _, _ =  self.readVTK(self.mask_filename)
+            mask_array, _, _ =  self.readVTK(mask_filename)
             
             # Adjust to adequate tensor dimensions
             
@@ -507,11 +534,11 @@ class testing:
 
             Y = Variable(torch.from_numpy(np.flip(mask,axis = 0).copy())).long()
             
-            return X, Y, origin, spacing
+            return X, Y, origin, spacing, sum_t_list
         
         else:
             
-            return X, origin, spacing
+            return X, origin, spacing, sum_t_list
     
     
     def modelPreparation(self):
@@ -646,143 +673,189 @@ class testing:
         
         coincide_img = 1
         
-        if not('CKD015' in self.img_filename[0]):
-            
-            # Avoid that patient (CKD015)
+        cont = 0
         
-            # Make sure that image and mask coincide (if mask is not None)
+        all_results = []
+        
+        for mask_path in self.mask_filename:
+        
+            if not('CKD015' in self.img_filename[0]):
+                
+                # Avoid that patient (CKD015)
             
-            if self.mask_filename is not None:
+                # Make sure that image and mask coincide (if mask is not None)
                 
-                if (self.img_filename[0].replace('mag','msk') == self.mask_filename) or (self.img_filename[0].replace('pha','msk') == self.mask_filename) or (self.img_filename[0].replace('magBF','msk') == self.mask_filename):
+                if len(self.mask_filename) != 0:
                     
-                    coincide = 1
-                
-                else:
+                    if (self.img_filename[cont][0].replace('mag','msk') == self.mask_filename[cont]) or (self.img_filename[cont][0].replace('pha','msk') == self.mask_filename[cont]) or (self.img_filename[cont][0].replace('magBF','msk') == self.mask_filename[cont]):
+                        
+                        coincide = 1
                     
-                    coincide = 0
-                    
-                    print('\nImage and mask files are not coincident. Please provide coincident image and mask files\n')
-            
-            
-            # Make sure that if there is more than one image filename, these names are correspondent
-            
-            if len(self.img_filename) > 1:
-                
-                coincide_img = 0
-                
-                if self.img_filename[1].replace('pha', 'mag') == self.img_filename[0] or self.img_filename[1].replace('pha', 'magBF') == self.img_filename[0]:
-                    
-                    coincide_img = 1
+                    else:
+                        
+                        coincide = 0
+                        
+                        print('\nImage and mask files are not coincident. Please provide coincident image and mask files\n')
                 
                 
-                else:
+                # Make sure that if there is more than one image filename, these names are correspondent
+                
+                if len(self.img_filename[cont]) > 1:
                     
                     coincide_img = 0
                     
-                    print('\n Magnitude and phase files are not coincident. Please provide coincident image and mask files\n')
-                    
-            
-                
-            
-            if coincide == 1 and coincide_img == 1:
-                
-                # All files are coincident. Extract image and mask tensors (mask tensor if mask available)
-                
-                if self.mask_filename is not None:
-                    
-                    X,Y, origin, spacing = self.extractTensors()
-                
-                else:
-                    
-                    X, origin, spacing = self.extractTensors()
-                    
-                    Y = None
-                
-                
-                model, optimizer = self.modelPreparation()
-                
-                if params.three_D: # 2D + time architecture
-                    
-                    out = model(X.cuda(non_blocking=True)).data
-                    
-                    out = torch.argmax(out, 1).cpu() # Inference output
-                    
-                else: # 2D architecture
-                    
-                    out = torch.zeros(1, X.shape[-3], X.shape[-2], X.shape[-1])
-                    
-                    for i in range(X.shape[-1]):
+                    if self.img_filename[cont][1].replace('pha', 'mag') == self.img_filename[cont][0] or self.img_filename[cont][1].replace('pha', 'magBF') == self.img_filename[cont][0]:
                         
-                        out_aux = model(X[:,:,:,:,i].cuda(non_blocking=True)).data
-                        
-                        out[:,:,:,i] = torch.argmax(out_aux, 1).cpu() # Inference output
-                
-                if self.mask_filename is not None:
+                        coincide_img = 1
                     
-                    metric_results = []
-                    
-                    # Extract segmentation metrics
-                    
-                    for metric in params.metrics:
-                    
-                        if metric == 'Dice' or metric == 'dice' or metric == 'DICE':
-                            
-                            dice = Dice(Y, out)
-                            
-                            metric_results.append(dice.online())
-                            
-                            print('Dice coefficient for {}: {}\n'.format(self.img_filename[0].split('/')[-1], dice.online()))
-                        
-                        
-                        elif metric == 'Precision' or metric == 'PRECISION' or metric == 'precision':
-                            
-                            prec = Precision(Y, out)
-                            
-                            metric_results.append(prec.online())
-                            
-                            print('Precision for {}: {}\n'.format(self.img_filename[0].split('/')[-1], prec.online()))
-                        
-                        
-                        elif metric == 'Recall' or metric == 'recall' or metric == 'RECALL':
-                            
-                            rec = Recall(Y, out)
-                            
-                            metric_results.append(rec.online())
-                            
-                            print('Recall for {}: {}\n'.format(self.img_filename[0].split('/')[-1], rec.online()))
-                    
-                # Provide resulting segmentations and MIPs
-                
-                self.Segmentation(X[0,0,:,:,:].numpy(), out.numpy(), Y, origin, spacing)
-                
-                self.MIP(X[0,0,:,:,:].numpy(), out.numpy(), Y)
-                
-                # Extract flow information from outputted result
-                
-                if 'pha' in params.train_with:
-                    
-                    pha_array = X[0,0,:,:,:]
-                
-                elif 'both' in params.train_with:
-                    
-                    pha_array = X[0,1,:,:,:]
-                
-                else:
-                    
-                    if 'BF' in params.train_with:
-                    
-                        pha_filename = self.img_filename[0].replace('magBF','pha')
                     
                     else:
-
-                        pha_filename = self.img_filename[0].replace('mag','pha')
                         
-                    pha_array, origin, spacing = self.readVTK(pha_filename)
+                        coincide_img = 0
+                        
+                        print('\n Magnitude and phase files are not coincident. Please provide coincident image and mask files\n')
+                        
                 
-                flow_out = self.flowFromMask(out, pha_array, spacing)
+                    
                 
-                return flow_out
+                if coincide == 1 and coincide_img == 1:
+                    
+                    # All files are coincident. Extract image and mask tensors (mask tensor if mask available)
+                    
+                    if len(self.mask_filename) != 0:
+                        
+                        if params.three_D:
+                        
+                            X,Y, origin, spacing, _ = self.extractTensors(self.img_filename[cont], self.mask_filename[cont])
+                        
+                        else:
+                            
+                            X,Y, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], self.mask_filename[cont])
+                    
+                    else:
+                        
+                        if params.three_D:
+                        
+                            X, origin, spacing, _ = self.extractTensors(self.img_filename[cont], None)
+                        
+                        else:
+                            
+                            X, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], None)
+                        
+                        Y = None
+                    
+                    
+                    with torch.no_grad():
+                    
+                        model, optimizer = self.modelPreparation()
+                        
+                        model.eval() # Model in evaluation mode
+                        
+                        if params.three_D: # 2D + time architecture
+                            
+                            out = model(X.cuda(non_blocking=True)).data
+                            
+                            out = torch.argmax(out, 1).cpu() # Inference output
+                            
+                        else: # 2D architecture
+                            
+                            out = torch.zeros(1, X.shape[-3], X.shape[-2], X.shape[-1])
+                            
+                            for i in range(X.shape[-1]):
+                                
+                                X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list), X.shape[2], X.shape[3])
+                                
+                                X_aux[:, :X.shape[1],:,:] = X[:,:,:,:,i]
+                                
+                                X_aux[:, X.shape[1]:,:,:] = torch.tensor(np.array(sum_t_list))
+                                
+                                out_aux = model(X_aux.cuda(non_blocking=True)).data
+    
+                                out[:,:,:,i] = torch.argmax(out_aux, 1).cpu() # Inference output
+                        
+                        if self.mask_filename is not None:
+                            
+                            metric_results = []
+ 
+                            # Extract segmentation metrics
+                            
+                            for metric in params.metrics:
+                            
+                                if metric == 'Dice' or metric == 'dice' or metric == 'DICE':
+                                    
+                                    dice = Dice(Y, out)
+                                    
+                                    metric_results.append(dice.online())
+                                    
+                                    print('Dice coefficient for {}: {}\n'.format(self.img_filename[cont][0].split('/')[-1], dice.online()))
+                                
+                                
+                                elif metric == 'Precision' or metric == 'PRECISION' or metric == 'precision':
+                                    
+                                    prec = Precision(Y, out)
+                                    
+                                    metric_results.append(prec.online())
+                                    
+                                    print('Precision for {}: {}\n'.format(self.img_filename[cont][0].split('/')[-1], prec.online()))
+                                
+                                
+                                elif metric == 'Recall' or metric == 'recall' or metric == 'RECALL':
+                                    
+                                    rec = Recall(Y, out)
+                                    
+                                    metric_results.append(rec.online())
+                                    
+                                    print('Recall for {}: {}\n'.format(self.img_filename[cont][0].split('/')[-1], rec.online()))
+                                
+                            all_results.append(metric_results)
+
+                            
+                        # Provide resulting segmentations and MIPs
+                        
+                        self.Segmentation(X[0,0,:,:,:].numpy(), out.numpy(), Y, origin, spacing, self.img_filename[cont])
+                        
+                        self.MIP(X[0,0,:,:,:].numpy(), out.numpy(), Y, self.img_filename[cont])
+                        
+                        # Extract flow information from outputted result
+                        
+                        if 'pha' in params.train_with:
+                            
+                            pha_array = X[0,0,:,:,:]
+                        
+                        elif 'both' in params.train_with:
+                            
+                            pha_array = X[0,1,:,:,:]
+                        
+                        else:
+                            
+                            if 'BF' in params.train_with:
+                            
+                                pha_filename = self.img_filename[cont][0].replace('magBF','pha')
+                            
+                            else:
+        
+                                pha_filename = self.img_filename[cont][0].replace('mag','pha')
+                                
+                            pha_array, origin, spacing = self.readVTK(pha_filename)
+                        
+                        flow_out = self.flowFromMask(out, pha_array, spacing)
+        
+
+        if len(self.mask_filename) != 0:            
+                    
+            # Save segmentation results
+            
+            results_array = np.array(metric_results)
+            
+            txt_filename = self.dest_path + self.mask_filename[cont][0].replace('msk','metrics')
+            
+            txt_filename.replace('vtk','txt')
+            
+            np.savetxt(txt_filename, results_array)
+            
+            cont += 1
+            
+        return flow_out
                 
 #                if self.mask_filename is not None: # Extract flow information from MAT file
 #                    
@@ -796,8 +869,8 @@ class testing:
 
 
 
-test = testing(['CKD2_CKD019_MRI3_dx_magBF_0.vtk'], '/home/andres/Documents/_Data/_Patients/_Raw/_ckd2/CKD019_MRI3/', 
-               'CKD2_CKD019_MRI3_dx_msk_0.vtk', 'trainedWithmagBF_rawfold_1.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
-               '/home/andres/Documents/_Data/CKD_Part2/4_Flow/','/home/andres/Documents/_Results/Test_09March')
+test = testing([['CKD2_CKD112_MRI3_dx_magBF_0.vtk']], '/home/andres/Documents/_Data/_Patients/_Raw/_ckd2/CKD112_MRI3/', 
+               ['CKD2_CKD112_MRI3_dx_msk_0.vtk'], 'trainedWithmagBF_rawfold_0.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
+               '/home/andres/Documents/_Data/CKD_Part2/4_Flow/','/home/andres/Documents/_Results/Test_09March/')
 
 flow = test.__main__()
