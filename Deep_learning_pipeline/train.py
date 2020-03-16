@@ -38,7 +38,208 @@ import itertools
 
 
 
-def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.eval_frequency, I = params.I):
+def optimizerExtractor(net):
+    
+    """
+    Return specified optimizer and if existing, learning rate scheduler.
+    
+    Params:
+        
+        - net: network where optimizer is applied
+    
+    
+    """
+
+    # Possible optimizers. Betas should not have to be changed
+    
+    found = 0
+    
+    if params.opt == 'Adam':
+    
+        optimizer = optim.Adam(net.parameters(), params.lr)
+        
+        found = 1
+    
+    elif params.opt == 'RMSprop':
+        
+        optimizer = optim.RMSprop(net.parameters(), params.lr)
+        
+        found = 1
+    
+    elif params.opt == 'SGD':
+        
+        optimizer = optim.SGD(net.parameters(), params.lr)
+        
+        found = 1
+    
+    else:
+        
+        print('\nWrong optimizer. Please define a valid optimizer (Adam/RMSprop/SGD)\n')
+        
+        exit()
+    
+    
+    if found == 1:
+        
+        if params.lr_scheduling != False:
+        
+            if params.lr_scheduling == 'step':
+            
+                scheduler = optim.lr_scheduler.StepLR(optimizer, step_size= params.step, gamma = params.lr_gamma)
+        
+            elif params.lr_scheduling == 'exponential':
+            
+                scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma = params.lr_gamma)
+        
+            return optimizer, scheduler
+        
+        else:
+            
+            return optimizer
+
+
+
+def lossSelection(output, Y):
+    
+    """
+    Select the desired loss function among a set of possible options in the 
+    Params file.
+    
+    Params:
+        
+        - output: result from network
+        
+        - Y: ground truth
+    
+    """
+    
+    # Select losses
+    
+    class_weights = torch.tensor(params.class_weights, dtype=torch.float32) # Weights to be used, if needed
+    
+    found = 0 # Flag to specify if the loss function has been found
+            
+    if params.loss_fun == 'dice':
+        
+        loss = utilities.dice_loss(output, Y.cuda(non_blocking=True), weights=class_weights.cuda(non_blocking=True))
+        
+        found = 1
+    
+    elif params.loss_fun == 'generalized_dice':
+        
+        loss = utilities.generalized_dice_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+    
+    elif params.loss_fun == 'bce':
+        
+        loss = utilities.BCEloss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+    
+    elif params.loss_fun == 'dice_bce':
+        
+        loss = utilities.DiceBCEloss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+    
+    elif params.loss_fun == 'exp_log':
+        
+        loss = utilities.exp_log_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+    
+    elif params.loss_fun == 'focal':
+        
+        loss = utilities.focal_loss(output, Y.cuda(non_blocking=True), weights=class_weights.cuda(non_blocking=True), gamma=params.loss_gamma)
+        
+        found = 1
+    
+    elif params.loss_fun == 'tversky':
+        
+        loss = utilities.tversky_loss_scalar(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+    
+    elif params.loss_fun == 'focal_tversky':
+        
+        loss = utilities.focal_tversky_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+    
+    else:
+        
+        print('\nWrong loss. Please define a valid loss function (dice/generalized_dice/bce/dice_bce/exp_log/focal/tversky/focal_tversky)\n')
+
+        exit()
+    
+    
+    if found == 1:
+        
+        return loss
+    
+
+def checkpointLoading(net, optimizer, k):
+    
+    """
+    Load checkpoints from previously trained models.
+    
+    Params:
+        
+        - net: network to be trained
+        
+        - optimizer: optimizer used to train the network
+        
+        - k: cross-validation fold from where to load model
+    
+    Returns:
+        
+        - net: loaded net
+        
+        - optimizer: loaded optimizer
+    
+    
+    """
+
+
+    print('\nTry to load previously trained models\n')
+    
+    if params.pre_training:
+        
+       filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '_pretrained.tar'  
+        
+        
+    else:
+                    
+        filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
+    
+    
+    
+    files_saved = os.listdir(params.network_data_path)
+    
+    if filename in files_saved: # Model has been already run with the same parameters
+        
+        # Load previous model
+        
+        net, optimizer, start_epoch, loss, best_dice = utilities.load_checkpoint(net, optimizer, 
+                                                                                   params.network_data_path,
+                                                                                   filename)
+        if k != 0: # Remove this later!!!
+        
+            prev_dice = best_dice
+        
+        
+        else:
+            
+            prev_dice = 0
+        
+    cont_load = 1
+    
+    return net, optimizer, cont_load, prev_dice
+
+
+
+def train(net, loader_train, loader_val = None, k = 0):
     
     
     '''
@@ -68,46 +269,21 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     batch_size = params.batch_size
     
     batch_GPU = params.batch_GPU
-    
-    class_weights = torch.tensor(params.class_weights, dtype=torch.float32)
 
     net.train(True) # Must be enabled for dropout to be active
     
     prev_dice = 0 # Reference Dice to save model
     
+    # Extract optimizer and if existing, scheduler
     
-    # Possible optimizers. Betas should not have to be changed
+    if params.lr_scheduling != False:
     
-    if params.opt == 'Adam':
-    
-        optimizer = optim.Adam(net.parameters(), params.lr)
-    
-    elif params.opt == 'RMSprop':
-        
-        optimizer = optim.RMSprop(net.parameters(), params.lr)
-    
-    elif params.opt == 'SGD':
-        
-        optimizer = optim.SGD(net.parameters(), params.lr)
+        optimizer, scheduler = optimizerExtractor(net) 
     
     else:
         
-        print('\nWrong optimizer. Please define a valid optimizer (Adam/RMSprop/SGD)\n')
-        
-        
-    # Possibility of learning rate scheduling
+        optimizer = optimizerExtractor(net) 
     
-        
-    if params.lr_scheduling == 'step':
-        
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size= params.step, gamma = params.lr_gamma)
-    
-    elif params.lr_scheduling == 'exponential':
-        
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma = params.lr_gamma)
-        
-        
-        
 
     start_time = time.time()
     
@@ -132,13 +308,13 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     
     #listenPaus = subprocess.Popen(["python3", "./listenPaus.py"])
     
-    while i < I:
+    while i < params.I:
         
         #Loads a batch of samples into RAM
         
         for X, Y, name in loader_train:
             
-            if i >= I:
+            if i >= params.I:
                 
                 continue
                 
@@ -146,19 +322,19 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
             
             for j in range(int(X.shape[0]/batch_size)):
 
-                if i >= I:
+                if i >= params.I:
                     
                     continue
 
                 optimizer.zero_grad()
 
-                #Accumulates gradients for this minibatch 
+                # Accumulates gradients for this minibatch 
                 
                 for m in range(math.ceil(batch_size/batch_GPU)):
 
                     i += batch_GPU 
 
-                    if i >= I:
+                    if i >= params.I:
                         
                         continue
                     
@@ -187,47 +363,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                     
                     output = net(Xpart.cuda(non_blocking=True))
                     
-                    # Select losses
-                    
-                    if params.loss_fun == 'dice':
-                        
-                        loss = utilities.dice_loss(output, Ypart.cuda(non_blocking=True), weights=class_weights.cuda(non_blocking=True))
-                    
-                    elif params.loss_fun == 'generalized_dice':
-                        
-                        loss = utilities.generalized_dice_loss(output, Ypart.cuda(non_blocking=True))
-                    
-                    elif params.loss_fun == 'bce':
-                        
-                        loss = utilities.BCEloss(output, Ypart.cuda(non_blocking=True))
-                    
-                    elif params.loss_fun == 'dice_bce':
-                        
-                        loss = utilities.DiceBCEloss(output, Ypart.cuda(non_blocking=True))
-                    
-                    elif params.loss_fun == 'exp_log':
-                        
-                        loss = utilities.exp_log_loss(output, Ypart.cuda(non_blocking=True))
-                    
-                    elif params.loss_fun == 'focal':
-                        
-                        loss = utilities.focal_loss(output, Ypart.cuda(non_blocking=True), weights=class_weights.cuda(non_blocking=True), gamma=params.loss_gamma)
-                    
-                    elif params.loss_fun == 'tversky':
-                        
-                        loss = utilities.tversky_loss_scalar(output, Ypart.cuda(non_blocking=True))
-                    
-                    elif params.loss_fun == 'focal_tversky':
-                        
-                        loss = utilities.focal_tversky_loss(output, Ypart.cuda(non_blocking=True))
-                    
-                    else:
-                        
-                        print('\nWrong loss. Please define a valid loss function (dice/generalized_dice/bce/dice_bce/exp_log/focal/tversky/focal_tversky)\n')
-                        
-                    
-
-                    
+                    loss = lossSelection(output, Ypart) # Computed loss 
                     
                     losses.append(loss.item())
 
@@ -258,32 +394,13 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
                 #Evaluates the network
 
                 
-                #out = torch.argmax(output, 1)
-                
                 if cont_load == 0: # See if there is a previous model run and if so, load it
                     
-                    print('\nTry to load previous trained models\n')
-                    
-                    filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
-                    
-                    files_saved = os.listdir(params.network_data_path)
-                    
-                    if filename in files_saved: # Model has been already run with the same parameters
-                        
-                        # Load previous model
-                        
-                        net, optimizer, start_epoch, loss, best_dice = utilities.load_checkpoint(net, optimizer, 
-                                                                                                   params.network_data_path,
-                                                                                                   filename)
-
-
-                        #prev_dice = best_dice RE-ACTIVATE ON FRIDAY!!!!
-                        
-                    cont_load = 1  
+                    net, optimizer, cont_load, prev_dice = checkpointLoading(net, optimizer, k)
                     
                     
                 
-                if (eval_frequency != -1 and loader_val != None and i % eval_frequency in range(batch_size) and i not in range(batch_size)) or (i == I - 1):
+                if (params.eval_frequency != -1 and loader_val != None and i % params.eval_frequency in range(batch_size) and i not in range(batch_size)) or (i == params.I - 1):
                     
                     #Evaluate a series of metrics at this point in training
                     
@@ -396,7 +513,7 @@ def train(net, loader_train, loader_val = None, k = 0, eval_frequency = params.e
     # Saves training losses as a file
     
 
-    with open(params.network_data_path + 'Training_losses_fold_' + str(k) + '_' + str(I) + 'trainedWith' + params.train_with + '_' + params.prep_step, 'w') as file:
+    with open(params.network_data_path + 'Training_losses_fold_' + str(k) + '_' + str(params.I) + 'trainedWith' + params.train_with + '_' + params.prep_step, 'w') as file:
         
         for i in range(len(losses)):
             

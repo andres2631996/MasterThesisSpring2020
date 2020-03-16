@@ -29,8 +29,9 @@ run_path = '/home/andres/Documents/_Code/runs/'
 param_files = sorted(os.listdir(run_path))
 
 while len(param_files) != 0:
-
     
+    param_files = sorted(os.listdir(run_path))
+
     # Take the first file in the runs folder and rename it to "params.py"
     
     os.rename(run_path + param_files[0], run_path + 'params.py')

@@ -11,49 +11,9 @@ import numpy as np
 
 import random
 
-import matplotlib.pyplot as plt
+import sys
 
-from torchvision import transforms
-
-import torchvision.transforms.functional as TF
-
-from PIL import Image
-
-
-class RRC(transforms.RandomAffine):
-    
-    def __call__(self, img, mask):
-        
-        """
-        Args:
-            img: 3D array
-
-        Returns:
-            PIL Image: Randomly cropped and resized image.
-            
-        """
-        
-        im = Image.fromarray(img[:,:,img.shape[-1]//2])
-        
-        i, j, h, w = self.get_params(im, self.scale, self.ratio)
-        
-        img_final = np.zeros(img.shape)
-        
-        mask_final = np.zeros(mask.shape)
-
-        for i in range(img.shape[-1]):
-            
-            im = Image.fromarray(img[:,:,i])
-
-            trans_im = transforms.RandomAffine(img[:,:,i], i, j, h, w, self.size, self.interpolation)
-            
-            trans_mask = transforms.RandomAffine(mask[:,:,i], i, j, h, w, self.size, self.interpolation)
-            
-            img_final[:,:,i] = np.array(trans_im)
-            
-            mask_final[:,:,i] = np.array(trans_mask)
-
-        return img_final, mask_final
+import params
     
     
 
@@ -63,32 +23,24 @@ class Augmentation:
     Perform augmentation on given images: Gaussian noise, translation, rotation,
     scaling, horizontal/vertical flipping, sequence reverse (time flipping).
     
+    It is just used in 2D+time, since it allows to augment neighboring frames in
+    the same way.
+    
     Params:
         
         - img: image to augment (N, H, W, T, channels)
         
         - seg: corresponding mask to augment
-        
-        - limit_params: limit parameters to deal with
-        
-        - probs: probabilities for events to happen
-        
-        - work_with: type of images that are being augmented
     
     
     """
     
-    def __init__(self, img, seg, limit_params, probs, work_with):
+    def __init__(self, img, seg):
         
         self.img = img
         
         self.seg = seg
-        
-        self.limit_params = limit_params
-        
-        self.probs = probs
-        
-        self.work_with = work_with
+
     
     
     
@@ -111,8 +63,6 @@ class Augmentation:
         
         """
         
-        r_noise = random.uniform(0,1)
-        
         r_sc = random.uniform(0,1)
         
         r_rot = random.uniform(0,1)
@@ -121,21 +71,12 @@ class Augmentation:
         
         r_flip_temp = random.uniform(0,1)
         
-        # Noise randomization
-        
-        if r_noise < self.probs[0]:
-            
-            amp = random.uniform(0,self.limit_params[0])
-        
-        else:
-            
-            amp = 0
         
         # Scale randomization
         
-        if r_sc < self.probs[1]:
+        if r_sc < params.augm_probs[0]:
             
-            sc = random.uniform(0,self.limit_params[1])
+            sc = random.uniform(0,params.augm_params[0])
     
             scale = 1 + (np.random.rand()-1) * sc
             
@@ -147,9 +88,9 @@ class Augmentation:
         
         # Rotation randomization
         
-        if r_rot < self.probs[2]:
+        if r_rot < params.augm_probs[1]:
             
-            angle = random.uniform(-self.limit_params[2], self.limit_params[2])*np.pi/180
+            angle = random.uniform(- params.augm_params[1], params.augm_params[1])*np.pi/180
     
         else:
             
@@ -158,7 +99,7 @@ class Augmentation:
         
         # Flipping randomization
         
-        if r_flip < self.probs[3]:
+        if r_flip < params.augm_probs[2]:
             
             flip = np.random.randint(1,3)
         
@@ -169,7 +110,7 @@ class Augmentation:
         
         # Temporal flipping randomization
         
-        if r_flip_temp < self.probs[4]:
+        if r_flip_temp < params.augm_probs[3]:
             
             flip_temp = 1
         
@@ -178,7 +119,7 @@ class Augmentation:
             flip_temp = 0
     
     
-        out_params = [amp, scale, angle, flip, flip_temp]
+        out_params = [scale, angle, flip, flip_temp]
         
         return out_params
 
@@ -278,7 +219,17 @@ class Augmentation:
         return final_img, final_seg
 
 
+# To run in terminal:
+
+# img = sys.argv[1]
+# seg = sys.argv[2] 
+# limit_params = sys.argv[3]
+# probs = sys.argv[4] 
+# studies = sys.argv[5]
+# k = sys.argv[6]
+# rep = sys.argv[7]    
+
+
+# if __name__ == "__main__":
+        
     
-
-
-# if __name__ == "__main__":  

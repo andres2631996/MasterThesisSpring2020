@@ -12,45 +12,33 @@ import os
 
 import time
 
-import datetime
-
-import shutil
-
 import torch
 
 import numpy as np
 
 import matplotlib.pyplot as plt
 
-from datasets import QFlowDataset
-
-from patientStratification import StratKFold
-
 import params
-
-import itertools
 
 import utilities
 
 import torch.optim as optim
 
-import train
-
 import models
+
+import pandas as pd
 
 import vtk
 
 from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 
-import flowInformation
-
-import png
+from flowInformation import FlowInfo
 
 from torch.autograd import Variable
 
 from evaluate import Dice, Precision, Recall
 
-
+import cv2
 
 
 
@@ -63,7 +51,7 @@ class testing:
         
         - img_filename: list of filename(s) of image to test [magnitude]/[phase]/[magnitude, phase]
         
-        - img_path: folder where image, phase file and mask are located
+        - img_path: list of folder(s) where image, phase file and mask are located
         
         - mask_filename: corresponding list of mask filenames (None if not available)
         
@@ -74,6 +62,8 @@ class testing:
         - flow_path: folder with flow information (study dependent)
         
         - dest_path: folder where to save testing results (segmentations, MIPs...)
+        
+        - excel_file: file with Excel measurements (if available)
     
     
     Returns:
@@ -84,7 +74,10 @@ class testing:
     
     """
     
-    def __init__(self, img_filename, img_path, mask_filename, model_filename, model_path, flow_path, dest_path):
+    def __init__(self, study, img_filename, img_path, mask_filename, 
+                 model_filename, model_path, flow_path, dest_path, excel_file):
+        
+        self.study = study
         
         self.img_filename = img_filename
         
@@ -99,10 +92,12 @@ class testing:
         self.flow_path = flow_path
         
         self.dest_path = dest_path
+        
+        self.excel_file = excel_file
     
     
     
-    def readVTK(self, filename, order='F'):
+    def readVTK(self, img_path, filename, order='F'):
             
         """
         Utility function to read vtk volume. 
@@ -123,7 +118,7 @@ class testing:
     
         reader = vtk.vtkStructuredPointsReader()
     
-        reader.SetFileName(self.img_path + filename)
+        reader.SetFileName(img_path + filename)
     
         reader.Update()
     
@@ -144,82 +139,82 @@ class testing:
     
     
     
-    def array2vtk(self, array, filename, origin = [0,0,0], spacing = [1,1,1]):
-                
-        """
-        Convert array into .vtk file
-        
-        - Params:
-            
-            inherited class parameters (see description at beginning of the class)
-            
-            array: array to be converted into .vtk file
-            
-            filename: filename with which to save array as VTK file
-            
-            origin: origin of coordinate system, by default (0,0,0)
-            
-            spacing: spacing of coordinate system, by default (1,1,1)
-        
-        """
-          
-        vtk_writer = vtk.vtkStructuredPointsWriter()
+#    def array2vtk(self, array, filename, origin = [0,0,0], spacing = [1,1,1]):
+#                
+#        """
+#        Convert array into .vtk file
+#        
+#        - Params:
+#            
+#            inherited class parameters (see description at beginning of the class)
+#            
+#            array: array to be converted into .vtk file
+#            
+#            filename: filename with which to save array as VTK file
+#            
+#            origin: origin of coordinate system, by default (0,0,0)
+#            
+#            spacing: spacing of coordinate system, by default (1,1,1)
+#        
+#        """
+#          
+#        vtk_writer = vtk.vtkStructuredPointsWriter()
+#    
+#            
+#        # Check if destination folder exists
+#        
+#        #print('Checking if destination folder exists\n')
+#            
+#        isdir = os.path.isdir(self.dest_path)
+#            
+#        if not isdir:
+#            
+#            os.makedirs(self.dest_path)
+#            
+#            print('Non-existing destination path. Created\n')
+#        
+#        # Check if files already exist in destination folder
+#            
+#        exist = filename in os.listdir(self.dest_path)
+#        
+#        overwrite = 'y'
+#        
+#        if exist:
+#            
+#            overwrite = input("File is already in folder. Do you want to overwrite? [y/n]\n")
+#        
+#        if overwrite == 'y' or overwrite == 'Y':
+#                
+#            vtk_writer.SetFileName(self.dest_path + filename)
+#                
+#            vtk_im = vtk.vtkStructuredPoints()
+#        
+#            vtk_im.SetDimensions((array.shape[1],array.shape[0],array.shape[2], array.shape[3]))
+#            
+#            vtk_im.SetOrigin(origin)
+#            
+#            vtk_im.SetSpacing(spacing)
+#        
+#            pdata = vtk_im.GetPointData()
+#        
+#            vtk_array = numpy_to_vtk(array.swapaxes(0,1).ravel(order='F'),deep = 1, array_type=vtk.VTK_FLOAT)
+#        
+#            pdata.SetScalars(vtk_array)
+#        
+#            vtk_writer.SetFileType(vtk.VTK_BINARY)
+#        
+#            vtk_writer.SetInputData(vtk_im)
+#        
+#            vtk_writer.Update()
+#            
+#            #print('VTK file saved successfully!\n')
+#        
+#        else:
+#            
+#            print('\nOperation aborted\n')
     
-            
-        # Check if destination folder exists
-        
-        #print('Checking if destination folder exists\n')
-            
-        isdir = os.path.isdir(self.dest_path)
-            
-        if not isdir:
-            
-            os.makedirs(self.dest_path)
-            
-            print('Non-existing destination path. Created\n')
-        
-        # Check if files already exist in destination folder
-            
-        exist = filename in os.listdir(self.dest_path)
-        
-        overwrite = 'y'
-        
-        if exist:
-            
-            overwrite = input("File is already in folder. Do you want to overwrite? [y/n]\n")
-        
-        if overwrite == 'y' or overwrite == 'Y':
-                
-            vtk_writer.SetFileName(self.dest_path + filename)
-                
-            vtk_im = vtk.vtkStructuredPoints()
-        
-            vtk_im.SetDimensions((array.shape[1],array.shape[0],array.shape[2]))
-            
-            vtk_im.SetOrigin(origin)
-            
-            vtk_im.SetSpacing(spacing)
-        
-            pdata = vtk_im.GetPointData()
-        
-            vtk_array = numpy_to_vtk(array.swapaxes(0,1).ravel(order='F'),deep = 1, array_type=vtk.VTK_FLOAT)
-        
-            pdata.SetScalars(vtk_array)
-        
-            vtk_writer.SetFileType(vtk.VTK_BINARY)
-        
-            vtk_writer.SetInputData(vtk_im)
-        
-            vtk_writer.Update()
-            
-            #print('VTK file saved successfully!\n')
-        
-        else:
-            
-            print('\nOperation aborted\n')
     
-    
-    def Segmentation(self, X, out, Y, origin, spacing, img_filename):
+    def Segmentation(self, X, out, Y, img_filename):
     
         """
         Provide a segmentation VTK file with testing results of mask overlapped
@@ -256,11 +251,10 @@ class testing:
         
         for i in range(final_result.shape[-1]):
             
-            final_result[:,:,:,i] = np.round(255*(X-np.amin(X))/(np.amax(X)-np.amin(X))) # Grayscale values from 0 to 255
+            final_result[:,:,:,i] = (X-np.amin(X))/(np.amax(X)-np.amin(X)) # Grayscale values from 0 to 255
         
             final_result[:,:,:,i].astype(int)
-        
-        plt.imshow(final_result[:,:,0,0], cmap = 'gray'), plt.colorbar()
+    
         
         # If no mask available, leave segmented result in green
         
@@ -270,13 +264,13 @@ class testing:
             
             out_aux = np.zeros(out.shape)
             
-            out_aux[ind_green] = 255.0
+            out_aux[ind_green] = 1
             
-            final_result[ind_green,1] = out_aux
+            final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 0] = 0
+        
+            final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 1] = 1
             
-            final_result[ind_green,0] = 0
-            
-            final_result[ind_green,2] = 0
+            final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 2] = 0
         
         
         # If mask is available, leave coincident results in green, results with result but not with mask in red 
@@ -296,50 +290,82 @@ class testing:
         
         mult = out*Y
         
-        ind_green = np.where(mult > 0)
+        ind_green = np.array(np.where(mult > 0))
         
         total = out_aux + Y_aux
         
-        ind_red = np.where(total == 2)
+        ind_red = np.array(np.where(total == 2))
         
-        ind_blue = np.where(total == 3)
+        ind_blue = np.array(np.where(total == 3))
+
+        # Color final mask result
         
-        final_result[ind_red,0]  = 255
+        final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 0]  = 1
         
-        final_result[ind_red,1] = 0
+        final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 1]  = 0
         
-        final_result[ind_red,2] = 0
+        final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 2]  = 0
         
-        final_result[ind_green,0]  = 0
+        final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 0] = 0
         
-        final_result[ind_green,1] = 255
+        final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 1] = 1
         
-        final_result[ind_green,2] = 0
+        final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 2] = 0
         
-        final_result[ind_blue,0]  = 0
+        final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 0] = 0
         
-        final_result[ind_blue,1] = 0
+        final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 1] = 0
         
-        final_result[ind_blue,2] = 255
+        final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 2] = 1
         
-        print(np.amax(final_result), np.amin(final_result))
+        return final_result
         
-        if 'pha' in params.train_with:
+#        
+#        if 'pha' in params.train_with:
+#        
+#            filename = img_filename[0].replace('pha','seg')
+#        
+#        elif not('pha' in params.train_with) and not('BF' in params.train_with):
+#            
+#            filename = img_filename[0].replace('mag','seg')
+#        
+#        elif not('pha' in params.train_with) and ('BF' in params.train_with):
+#            
+#            filename = img_filename[0].replace('magBF','seg')
         
-            filename = img_filename[0].replace('pha','seg')
         
-        elif not('pha' in params.train_with) and not('BF' in params.train_with):
-            
-            filename = img_filename[0].replace('mag','seg')
+        #final_result = final_result/np.amax(final_result)
         
-        elif not('pha' in params.train_with) and ('BF' in params.train_with):
-            
-            filename = img_filename[0].replace('magBF','seg')
+#        plt.figure(figsize = (13,5))
+#        
+#        plt.imshow(final_result[:,:,35,:])
         
+#        plt.subplot(131)
+#        
+#        plt.imshow(final_result[:,:,0,0], cmap = 'gray')
+#        
+#        plt.subplot(132)
+#        
+#        plt.imshow(final_result[:,:,0,1], cmap = 'gray')
+#        
+#        plt.subplot(133)
+#        
+#        plt.imshow(final_result[:,:,0,2], cmap = 'gray')
         
-        
-        
-        self.array2vtk(final_result, filename, origin, spacing)
+#        filename = filename.replace('vtk','nrrd')
+#        
+#        
+#        # Save result as .nrrd. Permute dimensions if I finally do this!!
+#        
+#        segm = sitk.GetImageFromArray(self.dest_path + final_result)
+#        
+#        writer = sitk.ImageFileWriter()
+#        
+#        writer.SetFileName(filename)
+#        
+#        writer.Execute(segm)
+#        
+        #self.array2vtk(final_result, filename, origin, spacing)
     
     
     
@@ -365,110 +391,42 @@ class testing:
         
         """
         
-        final_result = np.zeros((X.shape[0], X.shape[1], X.shape[2], 3))
+        final_result = self.Segmentation(X, out, Y, img_filename[0])
         
-        
-        if Y is not None:
-            
-            Y = Y.numpy()
-            
-        
-        for i in range(final_result.shape[-1]):
-            
-            final_result[:,:,:,i] = 255*(X-np.amin(X))/(np.amax(X)-np.amin(X)).astype(int) # Grayscale values from 0 to 255
-        
-    
-        # If no mask available, leave segmented result in green
-        
-        if Y is None:
-        
-            ind_green = np.where(out > 0.5)
-            
-            out_aux = np.zeros(out.shape)
-            
-            out_aux[ind_green] = 255.0
-            
-            final_result[ind_green,1] = out_aux
-            
-            final_result[ind_green,0] = 0
-            
-            final_result[ind_green,2] = 0
-        
-        
-        # If mask is available, leave coincident results in green, results with result but not with mask in red 
-        # and results with mask but not with result in blue
-        
-        ind_pos_out = np.where(out > 0) # Result locations
-        
-        ind_pos_Y = np.where(Y > 0) # Mask locations
-        
-        out_aux = np.copy(out)
-        
-        Y_aux = np.copy(Y)
-        
-        out_aux[ind_pos_out] = 2 # Set result locations to 2
-        
-        Y_aux[ind_pos_Y] = 3 # Set mask locations to 3
-        
-        mult = out*Y
-        
-        ind_green = np.where(mult > 0)
-        
-        total = out_aux + Y_aux
-        
-        ind_red = np.where(total == 2)
-        
-        ind_blue = np.where(total == 3)
-        
-        final_result[ind_red,0]  = 255
-        
-        final_result[ind_red,1] = 0
-        
-        final_result[ind_red,2] = 0
-        
-        final_result[ind_green,0]  = 0
-        
-        final_result[ind_green,1] = 255
-        
-        final_result[ind_green,2] = 0
-        
-        final_result[ind_blue,0]  = 0
-        
-        final_result[ind_blue,1] = 0
-        
-        final_result[ind_blue,2] = 255
+        mip_result = np.round(np.sum(255*final_result, axis = -2)/final_result.shape[2]).astype(int)
+
+        # Decide on final filename
         
         if 'pha' in params.train_with:
         
-            filename = img_filename[0].replace('pha','seg')
-            
-            filename = filename.replace('vtk','png')
+            filename = img_filename[0].replace('pha','mip')
         
         elif not('pha' in params.train_with) and not('BF' in params.train_with):
             
-            filename = img_filename[0].replace('mag','seg')
-            
-            filename = filename.replace('vtk','png')
+            filename = img_filename[0].replace('mag','mip')
         
         elif not('pha' in params.train_with) and ('BF' in params.train_with):
             
-            filename = img_filename[0].replace('magBF','seg')
-            
-            filename = filename.replace('vtk','png')
-            
-        mip_result = np.zeros((X.shape[0], X.shape[1], 3))
+            filename = img_filename[0].replace('magBF','mip')
         
-        for i in range(final_result.shape[-1]):
-            
-            mip_result[:,:,i] = np.max(final_result[:,:,:,i], axis = -1)
-            
-        png.from_array(mip_result, mode = 'RGB').save(self.dest_path + filename)    
+        filename = filename.replace('vtk','png')
+        
+        # Exchange blue and red channels to write PNG file with CV2
+        
+        mip_aux = np.copy(mip_result)
+        
+        mip_aux[:,:,0] = mip_result[:,:,-1]
+        
+        mip_aux[:,:,-1] = mip_result[:,:,0]
+
+        cv2.imwrite(self.dest_path + filename, mip_aux)
+
         
         
     
         
     
-    def extractTensors(self, img_filename, mask_filename):
+    def extractTensors(self, img_filename, img_path, mask_filename):
         
         """
         Provide torch tensors with data. If the evaluation is in 2D, a list
@@ -486,7 +444,7 @@ class testing:
             
             # Extract numpy array from image and mask filenames
         
-            img_array, origin, spacing = self.readVTK(img_filename[i])
+            img_array, origin, spacing = self.readVTK(img_path, img_filename[i])
             
             img_arrays.append(img_array)
             
@@ -526,7 +484,7 @@ class testing:
 
             # Load mask array
 
-            mask_array, _, _ =  self.readVTK(mask_filename)
+            mask_array, _, _ =  self.readVTK(img_path, mask_filename)
             
             # Adjust to adequate tensor dimensions
             
@@ -539,6 +497,8 @@ class testing:
         else:
             
             return X, origin, spacing, sum_t_list
+        
+        
     
     
     def modelPreparation(self):
@@ -561,10 +521,7 @@ class testing:
         else:
             
             print('Wrong architecture. Please introduce a valid architecture')
-        
-        
-        
-        
+
         
         if params.opt == 'Adam':
     
@@ -598,7 +555,7 @@ class testing:
             
             - inherited from class (check at the beginning of the class)
             - mask: binary or quasi-binary 3D array with results from neural network segmentation
-            - raw: corresponding phase image
+            - raw: corresponding velocity array
             - spacing: pixel size, useful to extract area and flow information
         
         Returns:
@@ -611,29 +568,29 @@ class testing:
         
         # Multiply mask to raw phase image: get just ROI information
         
-        mult = mask * raw
+        mult = mask[0,:,:,:] * raw
         
-        result = np.zeros((8, mask.shape[2]))
+        result = np.zeros((8, mask.shape[-1]))
         
-        for j in range(mask.shape[2]): # Frame by frame analysis
+        for j in range(mask.shape[-1]): # Frame by frame analysis
             
             mult_frame = mult[:,:,j] # Frame of the multiplication operator
             
-            s = np.sum(mult_frame.flatten()) # Overall sum of each frame. If > 0 --> left kidney, if < 0 --> right kidney
+            s = np.sum(mult_frame.flatten()) # Overall sum of velocities for each frame. If > 0 --> left kidney, if < 0 --> right kidney
             
             ind = np.where(mult_frame != 0) # Indexes inside the ROI
             
-            result[0,j] = np.abs(np.mean(mult_frame[ind].flatten()))/100 # Mean values
+            result[0,j] = np.mean(mult_frame[ind].flatten()) # Mean values (cm/s)
             
-            result[1,j] = np.abs(np.std(mult_frame[ind].flatten()))/100 # Standard deviation
+            result[1,j] = np.std(mult_frame[ind].flatten()) # Standard deviation (cm/s)
             
-            result[2,j] = np.amax(mult_frame)/100 # Maximum value
+            result[2,j] = np.amax(mult_frame) # Maximum value (cm/s)
             
-            result[3,j] = np.amin(mult_frame)/100 # Minimum value
+            result[3,j] = np.amin(mult_frame) # Minimum value (cm/s)
             
-            result[4,j] = np.array(ind).shape[-1]*spacing[0]*spacing[1]/100 # Area
+            result[4,j] = (np.array(ind).shape[-1])*spacing[0]*spacing[1]/100 # Area (cm2)
     
-            result[5,j] = abs(s/result[4,j])/10000 # Net flow
+            result[5,j] = result[0,j]/result[4,j] # Net flow (cm3/s = ml/s)
             
             ind_pos = np.where(mult_frame > 0) # Positive voxel values
                 
@@ -641,11 +598,11 @@ class testing:
             
             if s > 0:
         
-                result[6,j] = np.sum(mult_frame[ind_pos].flatten())/(result[4,j]*10000) # Positive flow values
+                result[6,j] = np.mean(mult_frame[ind_pos].flatten())/(result[4,j]) # Positive flow values
                 
                 if len(ind_neg) != 0: # Check if there are any negative voxels
                     
-                    result[7,j] = np.sum(mult_frame[ind_neg].flatten())/(result[4,j]*10000) # Negative flow values
+                    result[7,j] = np.mean(mult_frame[ind_neg].flatten())/(result[4,j]) # Negative flow values
                 
                 else:
                     
@@ -653,19 +610,158 @@ class testing:
             
             elif s < 0:
                 
-                result[6,j] = np.sum(mult_frame[ind_neg].flatten())/(result[4,j]*10000) # Positive flow values
+                result[6,j] = np.mean(mult_frame[ind_neg].flatten())/(result[4,j]) # Positive flow values
                 
                 if len(ind_pos) != 0: # Check if there are any positive voxels
                     
-                    result[7,j] = np.sum(mult_frame[ind_pos].flatten())/(result[4,j]*10000) # Negative flow values
+                    result[7,j] = np.mean(mult_frame[ind_pos].flatten())/(result[4,j]) # Negative flow values
                 
                 else:
                     
                     result[7,j] = 0
                 
         return result
+    
+    
+    def phase2velocity(self, phase_array, img_filename):
         
+        """
+        Transforms raw phase image into velocity map, to later extract flow information.
+        
+        Params:
+            
+            - phase array: array with phase values
+        
+        Returns:
+        
+            -vel_array: array with velocity values
+            
+            
+        """
+        
+        venc = 100 # Decide later on how to read this!!
+        
+        if 'CKD' in self.study:
+        
+            # Analyze CKD1 and CKD2 studies
+            
+            vel_array = phase_array/venc
+            
+            
+        
+        elif self.study == 'hero':
+            
+            # Analyze Heroic study
+            
+            if 'venc080' in img_filename:
+                
+                venc = 80
+            
+            elif 'venc120' in img_filename:
+                
+                venc = 120
+            
+            else:
+                
+                venc = 100
+            
+            min_pha = np.amin(phase_array)
+            
+            max_pha = np.amax(phase_array)
+            
+            if max_pha - min_pha < 2: # Range probably between 0 and 1
+                
+                aux_array = 2*phase_array - 1
+                
+                vel_array = aux_array*venc
+            
+            else:
+                
+                aux_array = phase_array/(np.amax(phase_array))
+                
+                vel_array = aux_array*venc
+        
+        elif self.study == 'extr':
+            
+            # Analyze extra images
+            
+            if '20190103' in img_filename:
+                
+                aux_array = phase_array/(np.amax(phase_array))
+                
+                vel_array = aux_array*venc
+            
+            else:
+                
+                vel_array = phase_array/venc
+            
+        return vel_array
+        
+    
+    def excelInfo(self, img_filename):
+        
+        """
+        Extract flow information from Excel file.
+        
+        
+        Returns:
+            
+            - array with maximum velocity, minimum velocity and mean arterial flow
+        
+        
+        """
+    
+        # Extract measured patients from CKD1
+    
+        target_patient = img_filename[5:11]
+        
+        target_rep = img_filename[12:16]
+        
+        target_orient = img_filename[17:19]
+        
+        df = pd.read_excel(self.flow_path + self.excel_file) # can also index sheet by name or fetch all sheets
+        
+        flow = np.array(df['Mean_arterial_flow'].tolist()) # List with flow values
+        
+        max_v = np.array(df['Peak_velocity_max'].tolist()) # List with maximum velocity values
+        
+        min_v = np.array(df['Peak_velocity_min'].tolist()) # List with minimum velocity flow values
+        
+        rep = df['MR_Visit'].tolist() # List with repetitions
+        
+        patients = df['Subject_ID'].tolist()
+        
+        orient_ckd1 = np.array(df['left_right_kidney'].tolist()) 
+        
+        ind_left = np.where(orient_ckd1 == 'left')
+        
+        ind_right = np.where(orient_ckd1 == 'right')
+        
+        orient_final = np.copy(orient_ckd1) # List with kidney orientations
+        
+        orient_final[ind_left] = 'si'
+        
+        orient_final[ind_right] = 'dx' 
+        
+        # Patient measurements
 
+        patient_ind = [i for i, s in enumerate(patients) if target_patient in s] # Indexes of same patient
+        
+        orients = orient_final[patient_ind] # Patient orientations
+        
+        ind_orient = [i for i, s in enumerate(orients) if target_orient in s]
+        
+        patient_orient_ind = patient_ind[ind_orient] # Indexes of patient with same kidney orientation
+        
+        patient_rep = rep[patient_orient_ind] # Patient visits with same orientation
+
+        ind_rep = [i for i, s in enumerate(patient_rep) if target_rep in s]
+        
+        patient_orient_rep_ind = patient_ind[ind_rep]
+        
+        return flow[patient_orient_rep_ind], max_v[patient_orient_rep_ind], min_v[patient_orient_rep_ind]
+        
+    
 
     def __main__(self):
         
@@ -676,6 +772,10 @@ class testing:
         cont = 0
         
         all_results = []
+        
+        result_flows = []
+        
+        gt_flows = []
         
         for mask_path in self.mask_filename:
         
@@ -726,21 +826,21 @@ class testing:
                         
                         if params.three_D:
                         
-                            X,Y, origin, spacing, _ = self.extractTensors(self.img_filename[cont], self.mask_filename[cont])
+                            X,Y, origin, spacing, _ = self.extractTensors(self.img_filename[cont], self.img_path[cont], self.mask_filename[cont])
                         
                         else:
                             
-                            X,Y, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], self.mask_filename[cont])
+                            X,Y, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], self.img_path[cont], self.mask_filename[cont])
                     
                     else:
                         
                         if params.three_D:
                         
-                            X, origin, spacing, _ = self.extractTensors(self.img_filename[cont], None)
+                            X, origin, spacing, _ = self.extractTensors(self.img_filename[cont], self.img_path[cont], None)
                         
                         else:
                             
-                            X, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], None)
+                            X, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], self.img_path[cont], None)
                         
                         Y = None
                     
@@ -772,6 +872,20 @@ class testing:
                                 out_aux = model(X_aux.cuda(non_blocking=True)).data
     
                                 out[:,:,:,i] = torch.argmax(out_aux, 1).cpu() # Inference output
+                        
+#                        plt.figure(figsize = (13,5))
+#                        
+#                        plt.subplot(131)
+#                        
+#                        plt.imshow(X_aux[0,0,130:158,130:158], cmap = 'gray')
+#                        
+#                        plt.subplot(132)
+#                        
+#                        plt.imshow(out[0,130:158,130:158,-1], cmap = 'gray')
+#                        
+#                        plt.subplot(133)
+#                        
+#                        plt.imshow(Y[0,130:158,130:158,-1], cmap = 'gray')
                         
                         if self.mask_filename is not None:
                             
@@ -812,7 +926,7 @@ class testing:
                             
                         # Provide resulting segmentations and MIPs
                         
-                        self.Segmentation(X[0,0,:,:,:].numpy(), out.numpy(), Y, origin, spacing, self.img_filename[cont])
+                        #self.Segmentation(X[0,0,:,:,:].numpy(), out.numpy(), Y, origin, spacing, self.img_filename[cont])
                         
                         self.MIP(X[0,0,:,:,:].numpy(), out.numpy(), Y, self.img_filename[cont])
                         
@@ -836,26 +950,198 @@ class testing:
         
                                 pha_filename = self.img_filename[cont][0].replace('mag','pha')
                                 
-                            pha_array, origin, spacing = self.readVTK(pha_filename)
+                            pha_array, origin, spacing = self.readVTK(self.img_path[cont], pha_filename)
                         
-                        flow_out = self.flowFromMask(out, pha_array, spacing)
-        
+                            # Obtain array with velocities (cm/s)
+                            
+                            vel_array = self.phase2velocity(pha_array, self.img_filename[cont][0])
+                            
+                            flow_out = self.flowFromMask(out.numpy(), vel_array, spacing)
+                            
+                            result_flows.append(flow_out)
+                        
+                        # Extract flow information from ground truth
+                        
+                        if self.study == 'CKD1':
+                            
+                            
+                            ref_flow, ref_max_v, ref_min_v = self.excelInfo(self.img_filename[cont][0])
+                            
+                            result_flow = np.mean(result_flows[-1][-3])
+                            
+                            result_v_max = np.max(result_flows[-1][0])
+                            
+                            result_v_min = np.min(result_flows[-1][0])
+                            
+                            gt_flows.append([ref_flow, ref_max_v, ref_min_v])
+                            
+                            # Save results in bar plots
+                            
+                            
+                            fig = plt.figure(figsize = (13,5))
+                            
+                            plt.bar(np.arange(1), [ref_flow, result_flow], 'b')
+                            
+                            plt.title('Net flow comparison for' + str(self.img_filename[cont][0]))
+                            
+                            plt.xlabel('Reference and result flows')
+                            
+                            plt.ylabel('Flow (ml/s)')
+                            
+                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[cont][0]) + '.png')
+                            
+                            
+                            fig = plt.figure(figsize = (13,5))
+                            
+                            plt.bar(np.arange(1), [ref_max_v, result_v_max], 'b')
+                            
+                            plt.title('v_max comparison for' + str(self.img_filename[cont][0]))
+                            
+                            plt.xlabel('Reference and result v_max')
+                            
+                            plt.ylabel('v_max (cm/s)')
+                            
+                            fig.savefig(self.dest_path + 'v_max_comparison' + str(self.img_filename[cont][0]) + '.png')
+                            
+                            
+                            fig = plt.figure(figsize = (13,5))
+                            
+                            plt.bar(np.arange(1), [ref_min_v, result_v_min], 'b')
+                            
+                            plt.title('v_min comparison for' + str(self.img_filename[cont][0]))
+                            
+                            plt.xlabel('Reference and result v_min')
+                            
+                            plt.ylabel('v_min (cm/s)')
+                            
+                            fig.savefig(self.dest_path + 'v_min_comparison' + str(self.img_filename[cont][0]) + '.png')
+                            
+                        
+                        
+                        else:
+                            
+                            # Extract flow information from txt_file
+                            
+                            # Search corresponding txt file
+                            
+                            txt_files = os.listdir(self.flow_path)
+                            
+                            # Get index of corresponding txt file
+                            
+                            # Get orientation and repetition number of file
+                            
+                            if 'dx' in self.img_filename[cont][0]:
+                                
+                                orient = 'dx'
+                            
+                            
+                            elif 'si' in self.img_filename[cont][0]:
+                                
+                                orient = 'si'
+                                
+                                
+                                
+                            if '_0' in self.img_filename[cont][0]:
+                                
+                                rep = '_0'
+                            
+                            
+                            elif '_1' in self.img_filename[cont][0]:
+                                
+                                rep = '_1'
+                            
+                            
+                            ind = self.img_filename[cont][0].index(orient)
+                                
+                            
+                            ind_txt = [i for i, s in enumerate(txt_files) if self.img_filename[cont][0][:ind + 2] in s]
+                            
+                            ind_final = -1
+                            
+                            
+                            for k in ind_txt:
+                                
+                                if not('venc' in self.img_filename[cont][0]):
+                                
+                                    if rep in txt_files[k]:
+                                        
+                                        ind_final = k
+                                
+                                else:
+                                    
+                                    if ('venc080' in txt_files[k] and 'venc080' in self.img_filename[cont][0]) and (rep in txt_files[k]):
+                                        
+                                        ind_final = k
+                                    
+                                    elif 'venc100' in txt_files[k] and 'venc100' in self.img_filename[cont][0] and (rep in txt_files[k]):
+                                        
+                                        ind_final = k
+                                        
+                                    elif 'venc120' in txt_files[k] and 'venc120' in self.img_filename[cont][0] and (rep in txt_files[k]):
+                                        
+                                        ind_final = k
+                                    
+                                    
+                            if k == -1:
+                                
+                                print('Flow file not found')
+                                
+                                exit()
 
-        if len(self.mask_filename) != 0:            
-                    
-            # Save segmentation results
-            
-            results_array = np.array(metric_results)
-            
-            txt_filename = self.dest_path + self.mask_filename[cont][0].replace('msk','metrics')
-            
-            txt_filename.replace('vtk','txt')
-            
-            np.savetxt(txt_filename, results_array)
-            
-            cont += 1
-            
-        return flow_out
+    
+                            load_info_mat = FlowInfo(self.study, self.flow_path, None, None, 'load', True, txt_files[ind_final])
+                            
+                            mean_v, std_v, max_v, min_v, energy, area, net_flow, pos_flow, neg_flow = load_info_mat.__main__()
+                            
+                            fig = plt.figure(figsize = (13,5))
+                            
+                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), mean_v/np.max(np.abs(mean_v)), 'b', label = 'Ground truth')
+                            
+                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), result_flows[-1][0]/np.max(np.abs(result_flows[-1][0])), 'r', label = 'Result')
+                            
+                            plt.title('Normalized flow comparison')
+                            
+                            plt.xlabel('Time frame #')
+                                       
+                            plt.ylabel('Normalized flow')
+                            
+                            plt.legend()
+                            
+                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[cont][0][:-3]) + '.png')
+       
+        
+                            # Save segmentation results
+                            
+                            results_array = np.array(metric_results)
+                            
+                            txt_filename = self.dest_path + self.mask_filename[cont].replace('msk','metrics')
+                            
+                            txt_filename = txt_filename.replace('vtk','txt')
+                            
+#                            with open(txt_filename, 'a') as file:
+#                                
+#                                for metric in params.metrics:
+#                    
+#                                    file.write(metric + ' ')
+#                                
+#                                file.write('\n')
+#                                
+#                                for i in range(len(results_array)):
+#                                    
+#                                    if len(params.metrics) == 1:
+#                                        
+#                                        file.write(str(results_array[i]) + ' ')
+#                                    
+#                                    elif len(params.metrics) > 1:
+#                                        
+#                                        file.write(str(results_array[i][j]) + ' ')
+#                                    
+#                                    file.write('\n')
+                            
+                            
+                            cont += 1
+
+            return flow_out
                 
 #                if self.mask_filename is not None: # Extract flow information from MAT file
 #                    
@@ -869,8 +1155,9 @@ class testing:
 
 
 
-test = testing([['CKD2_CKD112_MRI3_dx_magBF_0.vtk']], '/home/andres/Documents/_Data/_Patients/_Raw/_ckd2/CKD112_MRI3/', 
+test = testing('CKD2',[['CKD2_CKD112_MRI3_dx_magBF_0.vtk']], ['/home/andres/Documents/_Data/_Patients/_Raw/_ckd2/CKD112_MRI3/'], 
                ['CKD2_CKD112_MRI3_dx_msk_0.vtk'], 'trainedWithmagBF_rawfold_0.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
-               '/home/andres/Documents/_Data/CKD_Part2/4_Flow/','/home/andres/Documents/_Results/Test_09March/')
+               '/home/andres/Documents/_Data/CKD_Part2/4_Flow/','/home/andres/Documents/_Results/Test_09March/', None)
 
 flow = test.__main__()
+

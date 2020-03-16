@@ -101,6 +101,7 @@ def weights_init(m):
     
     """
     Initializes the weights in the layers with Xavier intialization
+    
     :param m: The model in question
     :return:
     """
@@ -112,6 +113,7 @@ def weights_init(m):
         if m.bias is not None:
             
             torch.nn.init.zeros_(m.bias)
+            
 
 
 def readVTK(filename, order='F'):
@@ -393,11 +395,8 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
     else:
         
         train = True
-        
-        test = False 
     
-        train_dataset = QFlowDataset(train_raw_paths, train_mask_paths,
-                                     train, params.train_with,params.three_D, params.augmentation)
+        train_dataset = QFlowDataset(train_raw_paths, train_mask_paths, train, params.augmentation)
         
         
         
@@ -434,10 +433,7 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
                     
                 train = False
                 
-                test = False
-                
-                val_dataset = QFlowDataset(val_raw_paths, val_mask_paths, train, 
-                                           params.train_with, params.three_D, False)
+                val_dataset = QFlowDataset(val_raw_paths, val_mask_paths, train, False)
 
 
                 loader_val = torch.utils.data.DataLoader(val_dataset,
@@ -503,8 +499,71 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
 #            print("Moved patients:", moved_patients_img, moved_patients_seg)
     
         return loader_train, loader_val
+
+  
+    
+def resultPrint(losses, val_results):
     
     
+    """
+    Display final results after cross-validation.
+    
+    Params:
+        
+        - losses: list with final losses of each fold (on training set)
+        
+        - val_results: list with final validation results of each fold
+    
+    
+    """
+    
+    mean_loss = np.mean(np.array(losses))
+
+    std_loss = np.std(np.array(losses))
+    
+    print('\nFinal {} loss over folds: {} +- {}\n'.format(params.loss_fun, mean_loss, std_loss))
+    
+    fig = plt.figure(figsize = (13,5))
+    
+    plt.bar(np.arange(1,K + 1),losses, color = 'b', yerr = losses_std)
+    
+    plt.title(params.loss_fun + ' loss over folds')
+    
+    plt.xlabel('Fold number')
+    
+    plt.ylabel(params.loss_fun + ' loss')
+    
+    fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+    
+    
+    
+        
+    for i in range(len(params.metrics)):
+        
+        mean_val = np.mean(val_results[:,0,i].flatten())
+    
+        std_val = np.std(val_results[:,0,i].flatten())
+        
+        print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
+        
+        # Show in figures cross-validation results, too
+        
+        # Results for validation
+        
+        fig = plt.figure(figsize = (13,5))
+    
+        plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
+        
+        plt.title(str(params.metrics[i]) + ' over validation folds')
+        
+        plt.xlabel('Fold number')
+        
+        plt.ylabel(str(params.metrics[i]))
+        
+        fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+
+
+
 
 
     
@@ -521,17 +580,14 @@ K = params.k #K in K-fold cross validation
 
 r_paths, m_paths = extractVTKfilesStratification(patient_paths)
 
+files_to_copy = ['params.py', 'crossValidation.py', 'datasets.py', 'train.py', 'evaluate.py']
+
 # Copies files to output path to help remembering the setup
+
+for file in files_to_copy:
     
-shutil.copyfile("params.py", data_path + "params.py")
-
-shutil.copyfile("crossValidation.py", data_path + "crossValidation.py")
-
-shutil.copyfile("datasets.py", data_path + "datasets.py")
-
-shutil.copyfile("train.py", data_path + "train.py")
-
-shutil.copyfile("evaluate.py", data_path + "evaluate.py")
+    shutil.copyfile(file, params.network_data_path + file)
+    
 
 if params.RAM_batch_size%params.batch_size != 0:
     
@@ -555,8 +611,6 @@ metrics_train_array = np.zeros((params.k, 2, len(params.metrics)))
 
 metrics_val_array = np.zeros((params.k, 2, len(params.metrics)))
 
-print('Dropout applied: {}'.format(params.dropout))
-
     
 
 for k in range(K):
@@ -574,9 +628,11 @@ for k in range(K):
         print(net)
         
         utilities.print_num_params(net)
-#        
-#    elif params.arch_type == "VGG11":
-#        net = UNet11(channel_count=no_channels, pre_trained=True).cuda()
+        
+        # MORE MODELS TO COME!!!        
+        #    elif params.arch_type == "VGG11":
+        #        net = UNet11(channel_count=no_channels, pre_trained=True).cuda()
+        
     else:
         
         print("Error: Architecture " + params.architecture + " not found.")
@@ -603,9 +659,7 @@ for k in range(K):
     
     print("\nStart training network, fold " + str(k) + "...\n")
 
-    loss, loss_std, metrics_val, model_state, optimizer, optimizer_state = train.train(net, loader_train, loader_val, 
-                                                                                            k, params.eval_frequency, 
-                                                                                            params.I)
+    loss, loss_std, metrics_val, model_state, optimizer, optimizer_state = train.train(net, loader_train, loader_val, k)
     
     
     # Save model and optimizer for later inference
@@ -626,7 +680,7 @@ for k in range(K):
         
         cont_val_result += 2
     
-     #Prints time estimate
+    # Prints time estimate
      
     pred_time_seconds = (time.time()-starting_time)*K/(k+1)
      
@@ -639,60 +693,17 @@ for k in range(K):
     
     print("Estimated time of Arrival: ", ETA)  
 
-
+resultPrint(losses, metrics_val_array) # Final cross-validation result display
 
 # Print cross-validation results and show figures
         
-mean_loss = np.mean(np.array(losses))
 
-std_loss = np.std(np.array(losses))
-
-print('\nFinal {} loss over folds: {} +- {}\n'.format(params.loss_fun, mean_loss, std_loss))
-
-fig = plt.figure(figsize = (13,5))
-
-plt.bar(np.arange(1,K + 1),losses, color = 'b', yerr = losses_std)
-
-plt.title(params.loss_fun + ' loss over folds')
-
-plt.xlabel('Fold number')
-
-plt.ylabel(params.loss_fun + ' loss')
-
-fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
-
-
-
-    
-for i in range(len(params.metrics)):
-    
-    mean_val = np.mean(metrics_val_array[:,0,i].flatten())
-
-    std_val = np.std(metrics_val_array[:,0,i].flatten())
-    
-    print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
-    
-    # Show in figures cross-validation results, too
-    
-    # Results for validation
-    
-    fig = plt.figure(figsize = (13,5))
-
-    plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
-    
-    plt.title(str(params.metrics[i]) + ' over validation folds')
-    
-    plt.xlabel('Fold number')
-    
-    plt.ylabel(str(params.metrics[i]))
-    
-    fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
     
 
     
 #t1 = time.time()
 #    
-#dataset = QFlowDataset(r_paths[3], m_paths[3], names[3], True, params.train_with, params.three_D, params.augmentation)
+#dataset = QFlowDataset(r_paths[3], m_paths[3], names[3], True, params.augmentation)
 #
 #test_loader = torch.utils.data.DataLoader(dataset, batch_size = 1, num_workers = 0)
 #
@@ -743,3 +754,9 @@ for i in range(len(params.metrics)):
 #plt.subplot(144)
 #
 #plt.imshow(x[0,:,:,20,0]*y[0,:,:,20], cmap = 'gray'), plt.colorbar()
+    
+    
+    
+# To run in terminal:
+
+# if __name__ == "__main__":

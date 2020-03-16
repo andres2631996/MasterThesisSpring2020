@@ -8,8 +8,6 @@ Created on Thu Feb 27 13:32:23 2020
 
 import numpy as np
 
-import os 
-
 import vtk
 
 from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
@@ -20,21 +18,14 @@ from torch.utils import data
 
 from torch.autograd import Variable
 
-import SimpleITK as sitk
-
-from augmentation import Augmentation
+from augmentation import Augmentation # Augmentation for 2D + time
 
 import params
 
-import matplotlib.pyplot as plt
-
 import random
 
-from torchvision.transforms import functional as tvF
+import augmentation2D # Augmentation for 2D
 
-import augmentation2D
-
-#from torchvision import datasets, transforms # Package to manipulate datasets
 
 
 
@@ -53,35 +44,22 @@ class QFlowDataset(data.Dataset):
         
         - train: if the dataset is used for training (True) or for validation or
                  testing (False)
-                 
-        - work_with: type of images to work with ('mag'/'pha'/'magBF'/'both'/'bothBF')
-        
-        - threeD: if True, work with 2D+time data, else work with 2D slices
         
         - augmentation: if True, augment the data with some transformations,
         else return original dataset
-        
-        - probs: if augmentation is True, probabilities for different augmentation 
-        events to happen
     
     """
-    # img_paths is list of paths with images
 
 
-    def __init__(self, img_paths, mask_paths, train, work_with, threeD, augmentation):
+    def __init__(self, img_paths, mask_paths, train, augmentation):
 
         self.img_paths = img_paths
         
         self.mask_paths = mask_paths
         
         self.train = train
-        
-        self.threeD = threeD
-        
-        self.work_with = work_with
-        
-        self.augmentation = augmentation
 
+        self.augmentation = augmentation
         
 #        
     def __len__(self):
@@ -156,20 +134,16 @@ class QFlowDataset(data.Dataset):
 #
     def __getitem__(self, index):
 
-#
-#        # Load images depending on parameter "work_with"
         
         # Check that the files read coincide
         
         coincide = 1 # Coincidence flag
         
-        ind = index
-        
-        raw_path = self.img_paths[ind]
+        raw_path = self.img_paths[index]
         
         if len(self.mask_paths) != 0:
 
-            mask_path = self.mask_paths[ind]
+            mask_path = self.mask_paths[index]
         
             # Make sure that raw and mask files are coincident
         
@@ -285,13 +259,13 @@ class QFlowDataset(data.Dataset):
                 
                 if augm_chance < params.augm_probs[0]:
     
-                    if self.threeD:
+                    if params.three_D:
                         
                         img = np.expand_dims(img, axis = 0)
                     
                         mask_array = np.expand_dims(mask_array, axis = 0)
                         
-                        augm = Augmentation(img, mask_array, params.augm_params, params.augm_probs, self.work_with)
+                        augm = Augmentation(img, mask_array)
                         
                         img, mask_array = augm.__main__()
                 
@@ -306,7 +280,7 @@ class QFlowDataset(data.Dataset):
         
             X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float()
         
-            if not(self.threeD):
+            if not(params.three_D):
                 
                 X = X.permute(-1,0,1) # Channels first
         

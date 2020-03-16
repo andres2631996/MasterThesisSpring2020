@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar 13 17:11:02 2020
+
+@author: andres
+"""
+
 import math
 
 import numpy as np
@@ -83,9 +91,6 @@ padding = 1 # Padding for architecture
 network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '/' # Folder where to save data related to Deep Learning architecture
 
 
-
-
-
 # Training parameters
 
 batch_size = 1
@@ -110,14 +115,14 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 75000
+I = 100
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*5000
+eval_frequency = batch_size*50
 
-loss_frequency = batch_size*1000
+loss_frequency = batch_size*10
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 
@@ -125,7 +130,7 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.000001 # Learning rate
+lr = 0.00001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
@@ -133,13 +138,13 @@ step = I/10 # Step for LR scheduling
 
 lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
-
+pre_training = False # Use some pre-trained architecture
 
 
 
 # Loss function parameters
 
-loss_fun = 'tversky' # Loss function type. Can be dice, generalized_dice, focal, tversky, focal_tversky, exp_log, bce or bce_dice loss
+loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, tversky, focal_tversky, exp_log, bce or bce_dice loss
 
 loss_beta = 0.3
 
