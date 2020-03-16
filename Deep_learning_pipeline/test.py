@@ -59,7 +59,7 @@ class testing:
         
         - model: model with which to test images
         
-        - flow_path: folder with flow information (study dependent)
+        - flow_path: list of folder(s) with flow information (study dependent) 
         
         - dest_path: folder where to save testing results (segmentations, MIPs...)
         
@@ -74,10 +74,9 @@ class testing:
     
     """
     
-    def __init__(self, study, img_filename, img_path, mask_filename, 
+    def __init__(self, img_filename, img_path, mask_filename, 
                  model_filename, model_path, flow_path, dest_path, excel_file):
-        
-        self.study = study
+
         
         self.img_filename = img_filename
         
@@ -256,15 +255,12 @@ class testing:
             final_result[:,:,:,i].astype(int)
     
         
-        # If no mask available, leave segmented result in green
         
         if Y is None:
+            
+            # If no mask available, leave segmented result in green
         
-            ind_green = np.where(out > 0.5)
-            
-            out_aux = np.zeros(out.shape)
-            
-            out_aux[ind_green] = 1
+            ind_green = np.array(np.where(out > 0.5))
             
             final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 0] = 0
         
@@ -273,50 +269,54 @@ class testing:
             final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 2] = 0
         
         
-        # If mask is available, leave coincident results in green, results with result but not with mask in red 
-        # and results with mask but not with result in blue
+        else:
         
-        ind_pos_out = np.where(out > 0) # Result locations
         
-        ind_pos_Y = np.where(Y > 0) # Mask locations
-        
-        out_aux = np.copy(out)
-        
-        Y_aux = np.copy(Y)
-        
-        out_aux[ind_pos_out] = 2 # Set result locations to 2
-        
-        Y_aux[ind_pos_Y] = 3 # Set mask locations to 3
-        
-        mult = out*Y
-        
-        ind_green = np.array(np.where(mult > 0))
-        
-        total = out_aux + Y_aux
-        
-        ind_red = np.array(np.where(total == 2))
-        
-        ind_blue = np.array(np.where(total == 3))
-
-        # Color final mask result
-        
-        final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 0]  = 1
-        
-        final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 1]  = 0
-        
-        final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 2]  = 0
-        
-        final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 0] = 0
-        
-        final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 1] = 1
-        
-        final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 2] = 0
-        
-        final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 0] = 0
-        
-        final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 1] = 0
-        
-        final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 2] = 1
+            # If mask is available, leave coincident results in green, results with result but not with mask in red 
+            # and results with mask but not with result in blue
+            
+            ind_pos_out = np.where(out > 0) # Result locations
+            
+            ind_pos_Y = np.where(Y > 0) # Mask locations
+            
+            out_aux = np.copy(out)
+            
+            Y_aux = np.copy(Y)
+            
+            out_aux[ind_pos_out] = 2 # Set result locations to 2
+            
+            Y_aux[ind_pos_Y] = 3 # Set mask locations to 3
+            
+            mult = out*Y
+            
+            ind_green = np.array(np.where(mult > 0))
+            
+            total = out_aux + Y_aux
+            
+            ind_red = np.array(np.where(total == 2))
+            
+            ind_blue = np.array(np.where(total == 3))
+    
+            # Color final mask result
+            
+            final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 0]  = 1
+            
+            final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 1]  = 0
+            
+            final_result[ind_red[1,:], ind_red[2,:], ind_red[3,:], 2]  = 0
+            
+            final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 0] = 0
+            
+            final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 1] = 1
+            
+            final_result[ind_green[1,:], ind_green[2,:], ind_green[3,:], 2] = 0
+            
+            final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 0] = 0
+            
+            final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 1] = 0
+            
+            final_result[ind_blue[1,:], ind_blue[2,:], ind_blue[3,:], 2] = 1
+            
         
         return final_result
         
@@ -480,7 +480,7 @@ class testing:
             
         X = X.permute(0, -1, 1, 2,-2) # Channels first
 
-        if self.mask_filename is not None:
+        if len(self.mask_filename) != 0:
 
             # Load mask array
 
@@ -641,7 +641,9 @@ class testing:
         
         venc = 100 # Decide later on how to read this!!
         
-        if 'CKD' in self.study:
+        study = img_filename[:5]
+        
+        if 'CKD' in img_filename:
         
             # Analyze CKD1 and CKD2 studies
             
@@ -649,7 +651,7 @@ class testing:
             
             
         
-        elif self.study == 'hero':
+        elif study == 'hero':
             
             # Analyze Heroic study
             
@@ -681,7 +683,7 @@ class testing:
                 
                 vel_array = aux_array*venc
         
-        elif self.study == 'extr':
+        elif study == 'extr':
             
             # Analyze extra images
             
@@ -719,7 +721,7 @@ class testing:
         
         target_orient = img_filename[17:19]
         
-        df = pd.read_excel(self.flow_path + self.excel_file) # can also index sheet by name or fetch all sheets
+        df = pd.read_excel(self.flow_path[0] + self.excel_file) # can also index sheet by name or fetch all sheets
         
         flow = np.array(df['Mean_arterial_flow'].tolist()) # List with flow values
         
@@ -727,7 +729,7 @@ class testing:
         
         min_v = np.array(df['Peak_velocity_min'].tolist()) # List with minimum velocity flow values
         
-        rep = df['MR_Visit'].tolist() # List with repetitions
+        rep = np.array(df['MR_Visit']) # List with repetitions
         
         patients = df['Subject_ID'].tolist()
         
@@ -745,19 +747,19 @@ class testing:
         
         # Patient measurements
 
-        patient_ind = [i for i, s in enumerate(patients) if target_patient in s] # Indexes of same patient
+        patient_ind = np.array([i for i, s in enumerate(patients) if target_patient in s]).astype(int) # Indexes of same patient
         
         orients = orient_final[patient_ind] # Patient orientations
         
-        ind_orient = [i for i, s in enumerate(orients) if target_orient in s]
+        ind_orient = np.array([i for i, s in enumerate(orients) if target_orient in s]).astype(int)
         
         patient_orient_ind = patient_ind[ind_orient] # Indexes of patient with same kidney orientation
         
         patient_rep = rep[patient_orient_ind] # Patient visits with same orientation
 
-        ind_rep = [i for i, s in enumerate(patient_rep) if target_rep in s]
-        
-        patient_orient_rep_ind = patient_ind[ind_rep]
+        ind_rep = np.array([i for i, s in enumerate(patient_rep) if target_rep in s]).astype(int)
+
+        patient_orient_rep_ind = patient_orient_ind[ind_rep][0]
         
         return flow[patient_orient_rep_ind], max_v[patient_orient_rep_ind], min_v[patient_orient_rep_ind]
         
@@ -765,11 +767,11 @@ class testing:
 
     def __main__(self):
         
+        t1 = time.time()
+        
         coincide = 1
         
         coincide_img = 1
-        
-        cont = 0
         
         all_results = []
         
@@ -777,9 +779,9 @@ class testing:
         
         gt_flows = []
         
-        for mask_path in self.mask_filename:
+        for i in range(len(self.img_filename)):
         
-            if not('CKD015' in self.img_filename[0]):
+            if not('CKD015' in self.img_filename[i]):
                 
                 # Avoid that patient (CKD015)
             
@@ -787,7 +789,7 @@ class testing:
                 
                 if len(self.mask_filename) != 0:
                     
-                    if (self.img_filename[cont][0].replace('mag','msk') == self.mask_filename[cont]) or (self.img_filename[cont][0].replace('pha','msk') == self.mask_filename[cont]) or (self.img_filename[cont][0].replace('magBF','msk') == self.mask_filename[cont]):
+                    if (self.img_filename[i][0].replace('mag','msk') == self.mask_filename[i]) or (self.img_filename[i][0].replace('pha','msk') == self.mask_filename[i]) or (self.img_filename[i][0].replace('magBF','msk') == self.mask_filename[i]):
                         
                         coincide = 1
                     
@@ -800,11 +802,11 @@ class testing:
                 
                 # Make sure that if there is more than one image filename, these names are correspondent
                 
-                if len(self.img_filename[cont]) > 1:
+                if len(self.img_filename[i]) > 1:
                     
                     coincide_img = 0
                     
-                    if self.img_filename[cont][1].replace('pha', 'mag') == self.img_filename[cont][0] or self.img_filename[cont][1].replace('pha', 'magBF') == self.img_filename[cont][0]:
+                    if self.img_filename[i][1].replace('pha', 'mag') == self.img_filename[i][0] or self.img_filename[i][1].replace('pha', 'magBF') == self.img_filename[i][0]:
                         
                         coincide_img = 1
                     
@@ -826,21 +828,21 @@ class testing:
                         
                         if params.three_D:
                         
-                            X,Y, origin, spacing, _ = self.extractTensors(self.img_filename[cont], self.img_path[cont], self.mask_filename[cont])
+                            X,Y, origin, spacing, _ = self.extractTensors(self.img_filename[i], self.img_path[i], self.mask_filename[i])
                         
                         else:
                             
-                            X,Y, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], self.img_path[cont], self.mask_filename[cont])
+                            X,Y, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[i], self.img_path[i], self.mask_filename[i])
                     
                     else:
                         
                         if params.three_D:
                         
-                            X, origin, spacing, _ = self.extractTensors(self.img_filename[cont], self.img_path[cont], None)
+                            X, origin, spacing, _ = self.extractTensors(self.img_filename[i], self.img_path[i], None)
                         
                         else:
                             
-                            X, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[cont], self.img_path[cont], None)
+                            X, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[i], self.img_path[i], None)
                         
                         Y = None
                     
@@ -861,17 +863,17 @@ class testing:
                             
                             out = torch.zeros(1, X.shape[-3], X.shape[-2], X.shape[-1])
                             
-                            for i in range(X.shape[-1]):
+                            for k in range(X.shape[-1]):
                                 
                                 X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list), X.shape[2], X.shape[3])
                                 
-                                X_aux[:, :X.shape[1],:,:] = X[:,:,:,:,i]
+                                X_aux[:, :X.shape[1],:,:] = X[:,:,:,:,k]
                                 
                                 X_aux[:, X.shape[1]:,:,:] = torch.tensor(np.array(sum_t_list))
                                 
                                 out_aux = model(X_aux.cuda(non_blocking=True)).data
     
-                                out[:,:,:,i] = torch.argmax(out_aux, 1).cpu() # Inference output
+                                out[:,:,:,k] = torch.argmax(out_aux, 1).cpu() # Inference output
                         
 #                        plt.figure(figsize = (13,5))
 #                        
@@ -887,7 +889,7 @@ class testing:
 #                        
 #                        plt.imshow(Y[0,130:158,130:158,-1], cmap = 'gray')
                         
-                        if self.mask_filename is not None:
+                        if len(self.mask_filename) != 0:
                             
                             metric_results = []
  
@@ -901,7 +903,7 @@ class testing:
                                     
                                     metric_results.append(dice.online())
                                     
-                                    print('Dice coefficient for {}: {}\n'.format(self.img_filename[cont][0].split('/')[-1], dice.online()))
+                                    print('Dice coefficient for {}: {}\n'.format(self.img_filename[i][0].split('/')[-1], dice.online()))
                                 
                                 
                                 elif metric == 'Precision' or metric == 'PRECISION' or metric == 'precision':
@@ -910,7 +912,7 @@ class testing:
                                     
                                     metric_results.append(prec.online())
                                     
-                                    print('Precision for {}: {}\n'.format(self.img_filename[cont][0].split('/')[-1], prec.online()))
+                                    print('Precision for {}: {}\n'.format(self.img_filename[i][0].split('/')[-1], prec.online()))
                                 
                                 
                                 elif metric == 'Recall' or metric == 'recall' or metric == 'RECALL':
@@ -919,7 +921,7 @@ class testing:
                                     
                                     metric_results.append(rec.online())
                                     
-                                    print('Recall for {}: {}\n'.format(self.img_filename[cont][0].split('/')[-1], rec.online()))
+                                    print('Recall for {}: {}\n'.format(self.img_filename[i][0].split('/')[-1], rec.online()))
                                 
                             all_results.append(metric_results)
 
@@ -928,7 +930,7 @@ class testing:
                         
                         #self.Segmentation(X[0,0,:,:,:].numpy(), out.numpy(), Y, origin, spacing, self.img_filename[cont])
                         
-                        self.MIP(X[0,0,:,:,:].numpy(), out.numpy(), Y, self.img_filename[cont])
+                        self.MIP(X[0,0,:,:,:].numpy(), out.numpy(), Y, self.img_filename[i])
                         
                         # Extract flow information from outputted result
                         
@@ -944,17 +946,19 @@ class testing:
                             
                             if 'BF' in params.train_with:
                             
-                                pha_filename = self.img_filename[cont][0].replace('magBF','pha')
+                                pha_filename = self.img_filename[i][0].replace('magBF','pha')
                             
                             else:
         
-                                pha_filename = self.img_filename[cont][0].replace('mag','pha')
+                                pha_filename = self.img_filename[i][0].replace('mag','pha')
+                            
+                            
                                 
-                            pha_array, origin, spacing = self.readVTK(self.img_path[cont], pha_filename)
+                            pha_array, origin, spacing = self.readVTK(self.img_path[i], pha_filename)
                         
                             # Obtain array with velocities (cm/s)
                             
-                            vel_array = self.phase2velocity(pha_array, self.img_filename[cont][0])
+                            vel_array = self.phase2velocity(pha_array, self.img_filename[i][0])
                             
                             flow_out = self.flowFromMask(out.numpy(), vel_array, spacing)
                             
@@ -962,10 +966,12 @@ class testing:
                         
                         # Extract flow information from ground truth
                         
-                        if self.study == 'CKD1':
+                        study = self.img_filename[i][0][:4]
+                        
+                        if study == 'CKD1':
                             
                             
-                            ref_flow, ref_max_v, ref_min_v = self.excelInfo(self.img_filename[cont][0])
+                            ref_flow, ref_max_v, ref_min_v = self.excelInfo(self.img_filename[i][0])
                             
                             result_flow = np.mean(result_flows[-1][-3])
                             
@@ -977,44 +983,43 @@ class testing:
                             
                             # Save results in bar plots
                             
-                            
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.bar(np.arange(1), [ref_flow, result_flow], 'b')
+                            plt.bar(np.arange(2), [ref_flow, result_flow], color = 'b')
                             
-                            plt.title('Net flow comparison for' + str(self.img_filename[cont][0]))
+                            plt.title('Net flow comparison for ' + str(self.img_filename[i][0]))
                             
                             plt.xlabel('Reference and result flows')
                             
                             plt.ylabel('Flow (ml/s)')
                             
-                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[cont][0]) + '.png')
+                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[i][0]) + '.png')
                             
                             
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.bar(np.arange(1), [ref_max_v, result_v_max], 'b')
+                            plt.bar(np.arange(2), [ref_max_v, result_v_max], color = 'b')
                             
-                            plt.title('v_max comparison for' + str(self.img_filename[cont][0]))
+                            plt.title('v_max comparison for ' + str(self.img_filename[i][0]))
                             
                             plt.xlabel('Reference and result v_max')
                             
                             plt.ylabel('v_max (cm/s)')
                             
-                            fig.savefig(self.dest_path + 'v_max_comparison' + str(self.img_filename[cont][0]) + '.png')
+                            fig.savefig(self.dest_path + 'v_max_comparison' + str(self.img_filename[i][0]) + '.png')
                             
                             
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.bar(np.arange(1), [ref_min_v, result_v_min], 'b')
+                            plt.bar(np.arange(2), [ref_min_v, result_v_min], color = 'b')
                             
-                            plt.title('v_min comparison for' + str(self.img_filename[cont][0]))
+                            plt.title('v_min comparison for ' + str(self.img_filename[i][0]))
                             
                             plt.xlabel('Reference and result v_min')
                             
                             plt.ylabel('v_min (cm/s)')
                             
-                            fig.savefig(self.dest_path + 'v_min_comparison' + str(self.img_filename[cont][0]) + '.png')
+                            fig.savefig(self.dest_path + 'v_min_comparison' + str(self.img_filename[i][0]) + '.png')
                             
                         
                         
@@ -1024,44 +1029,56 @@ class testing:
                             
                             # Search corresponding txt file
                             
-                            txt_files = os.listdir(self.flow_path)
+                            if study == 'CKD2':
+                                
+                                flow_path = self.flow_path[1]
+                            
+                            elif study == 'Hero' or study == 'hero':
+                                
+                                flow_path = self.flow_path[2]
+                            
+                            elif study == 'Extr' or study == 'extr':
+                                
+                                flow_path = self.flow_path[3]
+                            
+                            txt_files = os.listdir(flow_path)
                             
                             # Get index of corresponding txt file
                             
                             # Get orientation and repetition number of file
                             
-                            if 'dx' in self.img_filename[cont][0]:
+                            if 'dx' in self.img_filename[i][0]:
                                 
                                 orient = 'dx'
                             
                             
-                            elif 'si' in self.img_filename[cont][0]:
+                            elif 'si' in self.img_filename[i][0]:
                                 
                                 orient = 'si'
                                 
                                 
                                 
-                            if '_0' in self.img_filename[cont][0]:
+                            if '_0' in self.img_filename[i][0]:
                                 
                                 rep = '_0'
                             
                             
-                            elif '_1' in self.img_filename[cont][0]:
+                            elif '_1' in self.img_filename[i][0]:
                                 
                                 rep = '_1'
                             
                             
-                            ind = self.img_filename[cont][0].index(orient)
+                            ind = self.img_filename[i][0].index(orient)
                                 
                             
-                            ind_txt = [i for i, s in enumerate(txt_files) if self.img_filename[cont][0][:ind + 2] in s]
+                            ind_txt = [i for i, s in enumerate(txt_files) if self.img_filename[i][0][:ind + 2] in s]
                             
                             ind_final = -1
                             
                             
                             for k in ind_txt:
                                 
-                                if not('venc' in self.img_filename[cont][0]):
+                                if not('venc' in self.img_filename[i][0]):
                                 
                                     if rep in txt_files[k]:
                                         
@@ -1069,15 +1086,15 @@ class testing:
                                 
                                 else:
                                     
-                                    if ('venc080' in txt_files[k] and 'venc080' in self.img_filename[cont][0]) and (rep in txt_files[k]):
+                                    if ('venc080' in txt_files[k] and 'venc080' in self.img_filename[i][0]) and (rep in txt_files[k]):
                                         
                                         ind_final = k
                                     
-                                    elif 'venc100' in txt_files[k] and 'venc100' in self.img_filename[cont][0] and (rep in txt_files[k]):
+                                    elif 'venc100' in txt_files[k] and 'venc100' in self.img_filename[i][0] and (rep in txt_files[k]):
                                         
                                         ind_final = k
                                         
-                                    elif 'venc120' in txt_files[k] and 'venc120' in self.img_filename[cont][0] and (rep in txt_files[k]):
+                                    elif 'venc120' in txt_files[k] and 'venc120' in self.img_filename[i][0] and (rep in txt_files[k]):
                                         
                                         ind_final = k
                                     
@@ -1089,7 +1106,7 @@ class testing:
                                 exit()
 
     
-                            load_info_mat = FlowInfo(self.study, self.flow_path, None, None, 'load', True, txt_files[ind_final])
+                            load_info_mat = FlowInfo(study, flow_path, None, None, 'load', True, txt_files[ind_final])
                             
                             mean_v, std_v, max_v, min_v, energy, area, net_flow, pos_flow, neg_flow = load_info_mat.__main__()
                             
@@ -1107,14 +1124,14 @@ class testing:
                             
                             plt.legend()
                             
-                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[cont][0][:-3]) + '.png')
+                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[i][0][:-3]) + '.png')
        
         
                             # Save segmentation results
                             
                             results_array = np.array(metric_results)
                             
-                            txt_filename = self.dest_path + self.mask_filename[cont].replace('msk','metrics')
+                            txt_filename = self.dest_path + self.mask_filename[i].replace('msk','metrics')
                             
                             txt_filename = txt_filename.replace('vtk','txt')
                             
@@ -1137,9 +1154,10 @@ class testing:
 #                                        file.write(str(results_array[i][j]) + ' ')
 #                                    
 #                                    file.write('\n')
-                            
-                            
-                            cont += 1
+            
+            t2 = time.time()
+            
+            print('Elapsed testing time: {}'.format(t2 - t1))
 
             return flow_out
                 
@@ -1152,12 +1170,137 @@ class testing:
 #                    txt_filename = self.mask_filename.replace('msk',)
 
 
+# Testing code
+            
+studies = ['_ckd1','_ckd2','_hero','_extr']
+
+init = '/home/andres/Documents/_Data/_Patients/'
+
+model = 'trainedWithmagBF_rawfold_0.tar'
+
+model_path = '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/'
+
+excel_file = 'CKD_QFlow_results.xlsx'
+
+dest_path = '/home/andres/Documents/_Results/Test_09March/'
+
+flow_paths = ['/home/andres/Documents/_Data/CKD_Part1/', '/home/andres/Documents/_Data/CKD_Part2/4_Flow/',
+              '/home/andres/Documents/_Data/Heroic/_Flow/', '/home/andres/Documents/_Data/Extra/_Flow/']
+
+# Choose level of preprocessing
+
+if params.prep_step == 'raw':
+    
+    prep_path = '_Raw/'
+
+elif params.prep_step == 'crop':
+    
+    prep_path = '_Pre_crop/'
+
+elif params.prep_step == 'prep':
+    
+    prep_path = '_Prep/'
 
 
+#test_images = []
+#
+#test_paths = []
+#
+#test_masks = []
+#
+#init_prep_path = init + prep_path
+#
+#for study in studies:
+#    
+#    study_path = init_prep_path + study + '/'
+#    
+#    patients = sorted(os.listdir(study_path))
+#    
+#    for patient in patients:
+#        
+#        if not('NO' in patient):
+#            
+#            images = sorted(os.listdir(study_path + patient))
+#            
+#            if not('both' in params.train_with):
+#                
+#                ind_img = np.array([i for i, s in enumerate(images) if params.train_with in s]).astype(int)
+#                
+#                ind_msk = np.array([i for i, s in enumerate(images) if 'msk' in s]).astype(int)
+#                
+#                cont = 0
+#                
+#                for ind in ind_img:
+#                
+#                    test_images.append([images[ind]])
+#                    
+#                    test_paths.append(study_path + patient + '/')
+#
+#                    if study == '_ckd1':
+#                        
+#                        test_masks.append(None)
+#                
+#                    else:
+#                        
+#                        test_masks.append(images[ind_msk[cont]])
+#
+#                    cont += 1
+#                    
+#            else:
+#                
+#                if 'BF' in params.train_with:
+#                
+#                    ind_mag = np.array([i for i, s in enumerate(images) if 'magBF' in s]).astype(int)
+#
+#                else:
+#                    
+#                    ind_mag = np.array([i for i, s in enumerate(images) if 'mag_' in s]).astype(int)
+#                
+#                ind_pha = np.array([i for i, s in enumerate(images) if 'pha' in s]).astype(int)
+#
+#                cont = 0
+#                
+#                for ind_m, ind_p in zip(ind_mag, ind_pha):
+#                
+#                    test_images.append([images[ind_m],images[ind_p]])
+#
+#                    if study == '_ckd1':
+#                        
+#                        test_masks.append(None)
+#                
+#                    else:
+#                        
+#                        test_masks.append(images[ind_msk[cont]])
+#
+#                    cont += 1
+#
+#test = testing(test_images, test_paths, test_masks, model, model_path, flow_paths, dest_path, excel_file)
+#
+#flow = test.__main__()
+            
+# Find all suitable files for testing
+            
 
-test = testing('CKD2',[['CKD2_CKD112_MRI3_dx_magBF_0.vtk']], ['/home/andres/Documents/_Data/_Patients/_Raw/_ckd2/CKD112_MRI3/'], 
-               ['CKD2_CKD112_MRI3_dx_msk_0.vtk'], 'trainedWithmagBF_rawfold_0.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
-               '/home/andres/Documents/_Data/CKD_Part2/4_Flow/','/home/andres/Documents/_Results/Test_09March/', None)
+# Change mask to list of Nones if they are not used with the generalized code!!!!!
+
+test = testing([['CKD1_CKD013_MRI1_si_magBF_0.vtk']], ['/home/andres/Documents/_Data/_Patients/_Raw/_ckd1/CKD013_MRI1/'], 
+               [], 'trainedWithmagBF_rawfold_0.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
+               flow_paths,'/home/andres/Documents/_Results/Test_09March/', 'CKD_QFlow_results.xlsx')
 
 flow = test.__main__()
 
+
+
+# To run in terminal:
+
+# test_images = sys.argv[1]
+# test_paths = sys.argv[2] 
+# test_masks = sys.argv[3]
+# model = sys.argv[4] 
+# model_path = sys.argv[5]
+# flow_paths = sys.argv[6]
+# dest_path = sys.argv[7]
+# excel_file = sys.argv[8]
+    
+
+# if __name__ == "__main__": 

@@ -43,7 +43,7 @@ studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
 prep_step = 'raw' # Level of preprocessing to apply for images to the network
 
-train_with = 'magBF' # Type of images to train with
+train_with = 'pha' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 

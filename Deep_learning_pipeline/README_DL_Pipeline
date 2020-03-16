@@ -1,15 +1,22 @@
 Information for code dealing with the Deep Learning pipeline:
 
-"augmentation.py" allows for data augmentation with noise, translation, rotation, scaling, spatial flipping and temporal flipping or reversal.
-Receives as inputs: img (images to augment), seg (corresponding masks to augment), limit_params (limitation parameters for events),
-probs(probabilities for events), work_with (image types to work with in the pipeline). 
+"augmentation.py" allows for data augmentation with rotation, scaling, spatial flipping and temporal flipping.
+It is used in 2D+time architectures, since it augments in the same way contiguous slices.
+Receives as inputs: img (images to augment), seg (corresponding masks to augment), limit_params (limitation parameters for events). 
+Outputs: augmented images and masks. It is executed in "datasets.py"
+
+"augmentation2D.py" allows for data augmentation with rotation, scaling, spatial flipping and temporal flipping.
+It is used in 2D+time architectures, since it augments in the same way contiguous slices.
+Receives as inputs: img (images to augment), seg (corresponding masks to augment) 
 Outputs: augmented images and masks. It is executed in "datasets.py"
 
 "datasets.py" provides datasets of images and masks from the same patient in order to work with them in PyTorch.
-Receives as inputs: img_path (paths of patient folders with images), train (whether dataset is for training if True or for validation if False), 
-train_with (type of image data to work with (magnitude, phase or both)), three_D (if data has to be rearranged as 3D), 
+Receives as inputs: img_paths (paths of patient files (2D or 2D+time)), train (whether dataset is for training if True or for validation if False), 
 augmentation (if data has to be augmented) and probs (a set of probabilities for augmentation events to happen (if augmentation is set to True))
-It is executed in "cross_validation.py".
-Outputs: dataset with 2D PC-MRI data
+It is executed in "crossValidation.py".
+Outputs: dataset with 2D or 2D+time PC-MRI data, depending on the architecture that is later on used
 
 "params.py" provides a series of parameters to run the Deep learning pipeline, which are loaded in different files of the pipeline
+
+"train.py" is in charge of training the different built architectures with the given datasets from "crossValidation.py".
+
