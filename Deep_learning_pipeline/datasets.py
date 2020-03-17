@@ -174,7 +174,7 @@ class QFlowDataset(data.Dataset):
             
             # Compute number of channels
         
-            if params.three_D:
+            if params.three_D or not(params.sum_work):
                 
                 if 'both' in params.train_with:
                 
@@ -216,9 +216,11 @@ class QFlowDataset(data.Dataset):
                     
                     img[:,:,0] = raw[:,:,0]
                     
-                    sum_t = self.sumTime(raw_path)
+                    if params.sum_work: # Work with extra channel with sum of time frames
                     
-                    img[:,:,1] = sum_t
+                        sum_t = self.sumTime(raw_path)
+
+                        img[:,:,1] = sum_t
     
             
             else:
@@ -246,10 +248,12 @@ class QFlowDataset(data.Dataset):
                     img[:,:,0] = raw[:,:,0]
                     
                     img[:,:,1] = pha_array[:,:,0]
+                
+                    if params.sum_work: # Work with extra channel with sum of time frames
                     
-                    img[:,:,2] = self.sumTime(raw_path)
-                    
-                    img[:,:,3] = self.sumTime(pha_path)
+                        img[:,:,2] = self.sumTime(raw_path)
+
+                        img[:,:,3] = self.sumTime(pha_path)
                     
             
             

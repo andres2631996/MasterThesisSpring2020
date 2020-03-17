@@ -43,9 +43,11 @@ studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
 prep_step = 'raw' # Level of preprocessing to apply for images to the network
 
-train_with = 'pha' # Type of images to train with
+train_with = 'mag_' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
+
+sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
 
@@ -88,7 +90,7 @@ kernel_size = 3 # Kernel size for convolutional architecture
 
 padding = 1 # Padding for architecture
 
-network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '/' # Folder where to save data related to Deep Learning architecture
+network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/' # Folder where to save data related to Deep Learning architecture
 
 
 # Training parameters
@@ -115,14 +117,14 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 100
+I = 75000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*50
+eval_frequency = batch_size*10000
 
-loss_frequency = batch_size*10
+loss_frequency = batch_size*1000
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 

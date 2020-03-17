@@ -203,17 +203,8 @@ def checkpointLoading(net, optimizer, k):
 
 
     print('\nTry to load previously trained models\n')
-    
-    if params.pre_training:
-        
-       filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '_pretrained.tar'  
-        
-        
-    else:
                     
-        filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
-    
-    
+    filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
     
     files_saved = os.listdir(params.network_data_path)
     
@@ -224,14 +215,17 @@ def checkpointLoading(net, optimizer, k):
         net, optimizer, start_epoch, loss, best_dice = utilities.load_checkpoint(net, optimizer, 
                                                                                    params.network_data_path,
                                                                                    filename)
-        if k != 0: # Remove this later!!!
-        
-            prev_dice = best_dice
         
         
-        else:
-            
-            prev_dice = 0
+        prev_dice = best_dice
+    
+    
+    else:
+        
+        prev_dice = 0
+        
+        print('No previously trained model found')
+        
         
     cont_load = 1
     

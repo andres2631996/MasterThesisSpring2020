@@ -39,20 +39,34 @@ class Augmentations2D:
 
         img, mask_aux = images_aug["image"], images_aug["mask"]
         
-        mask = mask_aux[:,:,0]
+        if params.sum_work:
         
-        sum_t = mask_aux[:,:,1:]
-        
-        
-        if len(img.shape) != 3:
+            mask = mask_aux[:,:,0]
+
+            sum_t = mask_aux[:,:,1:]
+
+            if len(sum_t.shape) != 3:
+
+                sum_t = np.expand_dims(sum_t, axis = -1)
+             
+            if len(img.shape) != 3:
+
+                img = np.expand_dims(img, axis = -1)
+
+            return img, mask, sum_t
+         
+        else:
             
-            img = np.expand_dims(img, axis = -1)
+            if len(img.shape) != 3:
+
+                img = np.expand_dims(img, axis = -1)
             
-        if len(sum_t.shape) != 3:
             
-            sum_t = np.expand_dims(sum_t, axis = -1)
+            return img, mask_aux
+            
+            
         
-        return img, mask, sum_t
+        
     
 
     
@@ -70,27 +84,34 @@ class Augmentations2D:
                     p = params.augm2D_probs[0]
                 )
         
+        if params.sum_work: # Augment an extra channel
         
-        img_aux = self.img[:,:,:self.img.shape[-1]//2]
-        
-        sum_t = self.img[:,:,self.img.shape[-1]//2:]
-        
-        mask_new = np.zeros((self.mask.shape[0], self.mask.shape[1], 1 + sum_t.shape[2]))
-        
-        mask_new[:,:,0] = self.mask
-        
-        mask_new[:,:,1:] = sum_t
-        
-        data = {"image": img_aux, "mask": mask_new}
+            img_aux = self.img[:,:,:self.img.shape[-1]//2]
 
-        
-        img, mask, sum_t = self.augment_slices(augmentation_pipeline, data)
-        
-        img_final = np.zeros(self.img.shape)
-        
-        img_final[:,:,:self.img.shape[-1]//2] = img
-        
-        img_final[:,:,self.img.shape[-1]//2:] = sum_t
+            sum_t = self.img[:,:,self.img.shape[-1]//2:]
+
+            mask_new = np.zeros((self.mask.shape[0], self.mask.shape[1], 1 + sum_t.shape[2]))
+
+            mask_new[:,:,0] = self.mask
+
+            mask_new[:,:,1:] = sum_t
+
+            data = {"image": img_aux, "mask": mask_new}
+
+
+            img, mask, sum_t = self.augment_slices(augmentation_pipeline, data)
+
+            img_final = np.zeros(self.img.shape)
+
+            img_final[:,:,:self.img.shape[-1]//2] = img
+
+            img_final[:,:,self.img.shape[-1]//2:] = sum_t
+            
+        else: # Augment an ordinary 2D set
+            
+            data = {"image": self.img, "mask": self.mask}
+            
+            img_final, mask = self.augment_slices(augmentation_pipeline, data)
 
         
         return img_final, mask

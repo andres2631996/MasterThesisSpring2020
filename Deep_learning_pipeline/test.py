@@ -59,7 +59,9 @@ class testing:
         
         - model: model with which to test images
         
-        - flow_path: list of folder(s) with flow information (study dependent) 
+        - flow_path: list of folder(s) with flow information (study dependent)
+        
+        - venc_path: folder with VENC information
         
         - dest_path: folder where to save testing results (segmentations, MIPs...)
         
@@ -75,7 +77,7 @@ class testing:
     """
     
     def __init__(self, img_filename, img_path, mask_filename, 
-                 model_filename, model_path, flow_path, dest_path, excel_file):
+                 model_filename, model_path, flow_path, venc_path, dest_path, excel_file):
 
         
         self.img_filename = img_filename
@@ -89,6 +91,8 @@ class testing:
         self.model_path = model_path
         
         self.flow_path = flow_path
+        
+        self.venc_path = venc_path
         
         self.dest_path = dest_path
         
@@ -639,9 +643,32 @@ class testing:
             
         """
         
-        venc = 100 # Decide later on how to read this!!
+        # Extract VENC info
+        
+        vencs = np.loadtxt(self.venc_path + 'venc_values.txt')
+        
+        names = np.loadtxt(self.venc_path + 'venc_files.txt', dtype = 'str')
         
         study = img_filename[:5]
+        
+        if 'BF' in params.train_with:
+        
+            name = img_filename.replace('magBF_','')
+        
+        elif params.train_with == 'mag_' or params.train_with == 'both':
+            
+            name = img_filename.replace('mag_','')
+           
+        elif params.train_with == 'pha':
+            
+            name = img_filename.replace('pha_','')
+        
+        
+        name = name.replace('.vtk','')
+        
+        ind = np.where(names == name)
+        
+        venc = vencs[ind]
         
         if 'CKD' in img_filename:
         
@@ -649,23 +676,11 @@ class testing:
             
             vel_array = phase_array/venc
             
+            vel_array += 1
             
+            vel_array = phase_array/2
         
         elif study == 'hero':
-            
-            # Analyze Heroic study
-            
-            if 'venc080' in img_filename:
-                
-                venc = 80
-            
-            elif 'venc120' in img_filename:
-                
-                venc = 120
-            
-            else:
-                
-                venc = 100
             
             min_pha = np.amin(phase_array)
             
@@ -673,15 +688,15 @@ class testing:
             
             if max_pha - min_pha < 2: # Range probably between 0 and 1
                 
-                aux_array = 2*phase_array - 1
-                
-                vel_array = aux_array*venc
+                vel_array = phase_array
             
             else:
                 
                 aux_array = phase_array/(np.amax(phase_array))
-                
-                vel_array = aux_array*venc
+            
+                aux_array += 1
+
+                vel_array = aux_array/2
         
         elif study == 'extr':
             
@@ -691,11 +706,18 @@ class testing:
                 
                 aux_array = phase_array/(np.amax(phase_array))
                 
-                vel_array = aux_array*venc
+                aux_array += 1
+
+                vel_array = aux_array/2
+                
             
             else:
                 
                 vel_array = phase_array/venc
+            
+                vel_array += 1
+
+                vel_array = phase_array/2
             
         return vel_array
         
@@ -954,15 +976,15 @@ class testing:
                             
                             
                                 
-                            pha_array, origin, spacing = self.readVTK(self.img_path[i], pha_filename)
-                        
-                            # Obtain array with velocities (cm/s)
-                            
-                            vel_array = self.phase2velocity(pha_array, self.img_filename[i][0])
-                            
-                            flow_out = self.flowFromMask(out.numpy(), vel_array, spacing)
-                            
-                            result_flows.append(flow_out)
+                        pha_array, origin, spacing = self.readVTK(self.img_path[i], pha_filename)
+
+                        # Obtain array with velocities (cm/s)
+
+                        vel_array = self.phase2velocity(pha_array, self.img_filename[i][0])
+
+                        flow_out = self.flowFromMask(out.numpy(), vel_array, spacing)
+
+                        result_flows.append(flow_out)
                         
                         # Extract flow information from ground truth
                         
@@ -973,19 +995,35 @@ class testing:
                             
                             ref_flow, ref_max_v, ref_min_v = self.excelInfo(self.img_filename[i][0])
                             
-                            result_flow = np.mean(result_flows[-1][-3])
+                            # Remove possible nans from empty segmentation results
                             
-                            result_v_max = np.max(result_flows[-1][0])
+                            result_flows_aux = result_flows[-1][-3][np.logical_not(np.isnan(result_flows[-1][-3]))]
                             
-                            result_v_min = np.min(result_flows[-1][0])
+                            result_v_aux = result_flows[-1][0][np.logical_not(np.isnan(result_flows[-1][0]))]
+                            
+                            result_flow = np.mean(result_flows_aux)
+                            
+                            result_v_max = np.nanmax(result_v_aux)
+                            
+                            result_v_min = np.nanmin(result_v_aux)
+                            
+                            if result_flow < 0:
+                                
+                                aux = result_v_max
+                                
+                                result_v_min = aux
+                                
+                                result_v_max = result_v_min
                             
                             gt_flows.append([ref_flow, ref_max_v, ref_min_v])
                             
                             # Save results in bar plots
                             
+                            print()
+                            
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.bar(np.arange(2), [ref_flow, result_flow], color = 'b')
+                            plt.bar(np.arange(2), [ref_flow, abs(result_flow)], color = 'b')
                             
                             plt.title('Net flow comparison for ' + str(self.img_filename[i][0]))
                             
@@ -998,7 +1036,7 @@ class testing:
                             
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.bar(np.arange(2), [ref_max_v, result_v_max], color = 'b')
+                            plt.bar(np.arange(2), [ref_max_v, abs(result_v_max)], color = 'b')
                             
                             plt.title('v_max comparison for ' + str(self.img_filename[i][0]))
                             
@@ -1011,7 +1049,7 @@ class testing:
                             
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.bar(np.arange(2), [ref_min_v, result_v_min], color = 'b')
+                            plt.bar(np.arange(2), [ref_min_v, abs(result_v_min)], color = 'b')
                             
                             plt.title('v_min comparison for ' + str(self.img_filename[i][0]))
                             
@@ -1187,6 +1225,8 @@ dest_path = '/home/andres/Documents/_Results/Test_09March/'
 flow_paths = ['/home/andres/Documents/_Data/CKD_Part1/', '/home/andres/Documents/_Data/CKD_Part2/4_Flow/',
               '/home/andres/Documents/_Data/Heroic/_Flow/', '/home/andres/Documents/_Data/Extra/_Flow/']
 
+venc_path = '/home/andres/Documents/_Data/venc_info/'
+
 # Choose level of preprocessing
 
 if params.prep_step == 'raw':
@@ -1283,11 +1323,11 @@ elif params.prep_step == 'prep':
 
 # Change mask to list of Nones if they are not used with the generalized code!!!!!
 
-test = testing([['CKD1_CKD013_MRI1_si_magBF_0.vtk']], ['/home/andres/Documents/_Data/_Patients/_Raw/_ckd1/CKD013_MRI1/'], 
-               [], 'trainedWithmagBF_rawfold_0.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
-               flow_paths,'/home/andres/Documents/_Results/Test_09March/', 'CKD_QFlow_results.xlsx')
+#test = testing([['CKD1_CKD013_MRI1_si_magBF_0.vtk']], ['/home/andres/Documents/_Data/_Patients/_Raw/_ckd1/CKD013_MRI1/'], 
+               #[], 'trainedWithmagBF_rawfold_0.tar', '/home/andres/Documents/_Data/Network_data/UNet_with_Residuals/',
+               #flow_paths,'/home/andres/Documents/_Results/Test_09March/', 'CKD_QFlow_results.xlsx')
 
-flow = test.__main__()
+#flow = test.__main__()
 
 
 
