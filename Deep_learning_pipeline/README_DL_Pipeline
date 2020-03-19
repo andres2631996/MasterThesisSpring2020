@@ -4,19 +4,110 @@ Information for code dealing with the Deep Learning pipeline:
 It is used in 2D+time architectures, since it augments in the same way contiguous slices.
 Receives as inputs: img (images to augment), seg (corresponding masks to augment), limit_params (limitation parameters for events). 
 Outputs: augmented images and masks. It is executed in "datasets.py"
+Requires to have installed: scipy.ndimage, NumPy, random, sys and "params.py"
 
 "augmentation2D.py" allows for data augmentation with rotation, scaling, spatial flipping and temporal flipping.
 It is used in 2D+time architectures, since it augments in the same way contiguous slices.
 Receives as inputs: img (images to augment), seg (corresponding masks to augment) 
 Outputs: augmented images and masks. It is executed in "datasets.py"
+Requires to have installed: NumPy, Matplotlib, albumentations, os, time, cv2, time and "params.py"
 
 "datasets.py" provides datasets of images and masks from the same patient in order to work with them in PyTorch.
 Receives as inputs: img_paths (paths of patient files (2D or 2D+time)), train (whether dataset is for training if True or for validation if False), 
 augmentation (if data has to be augmented) and probs (a set of probabilities for augmentation events to happen (if augmentation is set to True))
 It is executed in "crossValidation.py".
 Outputs: dataset with 2D or 2D+time PC-MRI data, depending on the architecture that is later on used
+Requires to have installed: NumPy, VTK, PyTorch, random, os, time, "params.py" "augmentation.py" and "augmentation2D.py"
 
-"params.py" provides a series of parameters to run the Deep learning pipeline, which are loaded in different files of the pipeline
+"params.py" provides a series of parameters to run the Deep learning pipeline, which are loaded in different files of the pipeline. 
+It contains different types of parameters:
 
-"train.py" is in charge of training the different built architectures with the given datasets from "crossValidation.py".
+- type of preprocessing to apply
+- type of data to work with (magnitude/phase/both)
+- data dimensions desired (2D or 2D+time)
+- if augmentation is desired, and if so, the chances for it to happen and parameters of the respective image transformations
+- model to be trained
+- parameters to train the model (loss, optimizer, batch size, number of architecture layers, scheduler, loss parameters, optimizer parameters, 
+iterations to train for, frequency of evaluation iterations, frequency of loss iterations...)
+- metrics to evaluate the model
+
+"train.py" is in charge of training the different built architectures with the given datasets from "crossValidation.py". It is executed in
+"crossValidation.py". It trains a given model in "params.py" with a series of parameters (number of iterations, loss function, 
+optimizer, learning rate, scheduler...) given from "params.py". It prints the loss function every certain number of iterations, 
+according to "params.py". It also evaluates the model with the validation set every certain number of iterations, printing a series of
+metrics in "params.py".
+
+Outputs: mean value of last training losses, standard deviation of last training losses, metric results from the validation set, model and 
+optimizer to be saved in "crossValidation.py"
+Requires to have installed: os, itertools, sys, math, time, datetime, PyTorch (optim, Functional), Matplotlib, "evaluate.py", "utilities.py",
+"params.py"
+
+
+"evaluate.py" evaluates the given model from "train.py" every certain number of given iterations. It is executed in "train.py". It computes a
+series of metrics (Dice coefficient, Precision, Recall...) specified in "params.py" after the evaluation.
+
+Outputs: validation metrics
+Requires to have installed: NumPy, cv2, PyTorch, VTK, time, math, Matplotlib and "params.py"
+
+
+"models.py" contains the different architectures that have been tested in the work, with different building blocks for each section. It is 
+executed from "crossValidation.py".
+Requires to have installed: NumPy, PyTorch (NN, Functional) and "params.py"
+
+
+
+"test.py" performs model testing given a list of image files, a list of image paths, a list of mask files (if not used, None), 
+the filename of some model to load,the path of the model file, a path for the files with flow information, a path for files with VENC information, 
+a path where to leave all the resulting information and an optional excel file with flow information 
+
+It first tests the model, providing a segmentation result. If the mask is available, it provides information on metrics as Dice coefficient, precision
+or recall, being the values saved in a text file. It also provides an image in color with the sum of the segmentation results along time 
+(the coloring varies in case the mask is present). If the mask is present, green is used to color correct segmentations, blue for undersegmentations and 
+red for oversegmentations. If the mask is absent, only green is used to color the result.
+
+Apart from providing an evaluation of the segmentation results, the code also provides an evaluation of the flow. If the mask is available, flow is 
+extracted from the result and from the mask and it is compared in all time instants, saving a plot with the comparison. If the mask is 
+not available but there are external flow results available, a comparison is also done with this, saving a bar plot with all this.
+
+To run in the terminal: list_of_image_files, list_of_image_paths, list_of_masks (if unavailable, empty list), model_filename, model_path, 
+list_of_paths_flow_information, destination_path, excel_filename (if unavailable, None)
+
+Requires to have installed: os, time, PyTorch (optim), Matplotlib, pandas, VTK, cv2, "params.py", "flowInformation.py", "evaluate.py"
+
+
+
+"utilities.py" contains some useful functions for the pipeline. Many functions present compute loss functions, being called from "train.py", as is the 
+case of "dice_loss", "BCEloss", "DiceBCEloss", "generalized_dice_loss", "exp_log_loss", "focal_loss", "tversky_loss_scalar", "focal_tversky_loss". They 
+compute respectively: Dice loss, binary cross-entropy loss, combined Dice and binary cross-entropy loss, generalized Dice loss, 
+exponential logarithmic Dice loss, focal Dice loss, Tversky loss and focal Tversky loss.
+
+Apart from loss functions, there are other useful functions as "clear_GPU" to empty the GPU in "train.py", "model_saving" to save a model and an optimizer,
+"model_loading" to load a model from a given architecture and optimizer, "load_checkpoint" to load some saved model checkpoint in "train.py",
+"print_num_params" to print the number of a parameters of a given model, "loadMetricsResults" to load some saved metric result from some evaluation or
+testing.
+
+Requires to have installed: Pytorch (including Functional, NN, autograd), os, NumPy and "params.py"
+
+
+"patientStratification.py" gets information on mean arterial flow from patients in different studies and prepares a stratified list of k lists
+of stratified patients according to their mean arterial flow, obtained either from Excel files or .mat files from Segment
+One must specify in the terminal: list_folders_for_training/validation excel_file_path excel_filename path_with_ckd1Images studiesForTraining/Validation
+				  k repeat/dont_repeat_artificially_data_from_minority_studies
+Requires to have installed: NumPy, os, pandas, random, scikit-learn, itertools and FlowInformation.py script (see info on README_postprocessing)
+
+
+"crossValidation.py" is the central file of the pipeline. It receives patient information on flow and stratifies the patients into cross-
+validation folds according to the values on mean flow that are obtained. With the obtained information in stratification, the code accesses
+the corresponding 2D or 2D+time images and saves them in datasets by executing "datasets.py". Then it starts to train and validate with these data by 
+executing "train.py", saving the model, optimizer, training loss and validation metrics of each fold. When all folds have been executed, it
+prints the overall training loss and result metrics over folds, saving them as PNG files and TXT files with values.
+
+"vencExtractor.ipynb" reads DICOM files or MAT files and extracts from them VENC values for later flow evaluation.
+Requires to have installed: NumPy, scipy.io, PyDicom, os and itertools
+
+"test_schedule.py" is a special file to execute programmed runs remotely. It automatically updates "params.py" with the desired parameters for the pipeline
+and runs for those parameters, saving all the results. When one run has been completed, "params.py" is updated again with the next run, and so on.
+Requires to have installed: NumPy, time, os, shutil, runpy, "params.py", folder "runs" with different versions of "params.py" and "crossValidation.py"
+
+"listen_paus.py" is a special file designed to pause training. It is not in use for now.
 
