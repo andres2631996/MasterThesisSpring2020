@@ -41,9 +41,9 @@ studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
 # Data selection parameters
 
-prep_step = 'raw' # Level of preprocessing to apply for images to the network
+prep_step = 'prep' # Level of preprocessing to apply for images to the network
 
-train_with = 'mag_' # Type of images to train with
+train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
@@ -80,7 +80,7 @@ architecture = 'UNet_with_Residuals' # Architecture type
 
 normalization = 'instance' # Normalization type to apply in networks (None/batch/instance)
 
-dropout = 0.0 # Dropout rate to apply in networks
+dropout = 0.5 # Dropout rate to apply in networks
 
 layers = 4 # Number of architecture layers
 
@@ -90,9 +90,21 @@ kernel_size = 3 # Kernel size for convolutional architecture
 
 padding = 1 # Padding for architecture
 
-network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/' # Folder where to save data related to Deep Learning architecture
+if three_D:
+    
+    network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_3D/'
+    
+else:
+    
+    if sum_work:
 
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dsum/' # Folder where to save data related to Deep Learning architecture
 
+    else:
+        
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/'
+        
+        
 # Training parameters
 
 batch_size = 1
@@ -117,14 +129,14 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 75000
+I = 10000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*10000
+eval_frequency = batch_size*3000
 
-loss_frequency = batch_size*1000
+loss_frequency = batch_size*500
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 
@@ -141,6 +153,8 @@ step = I/10 # Step for LR scheduling
 lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 pre_training = False # Use some pre-trained architecture
+
+num_layers = 3 # Number of encoder and decoder layers to be used
 
 
 

@@ -224,7 +224,7 @@ def checkpointLoading(net, optimizer, k):
         
         prev_dice = 0
         
-        print('No previously trained model found')
+        print('No previously trained model found\n')
         
         
     cont_load = 1
@@ -414,6 +414,8 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                     
                     #results_train = evaluate.evaluate(net, loader_train, i)
+            
+                    
                     
                     results_eval = evaluate.evaluate(net, loader_val, i)
 
