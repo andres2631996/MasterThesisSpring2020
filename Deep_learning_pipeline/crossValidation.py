@@ -272,11 +272,12 @@ def extractVTKfilesStratification(patient_paths):
                         
                         mask_path.append([modality_path + image for image in images])
                         
-                        
+        if not(params.three_D):
                     
-        mask_path = list(itertools.chain.from_iterable(mask_path))            
+            mask_path = list(itertools.chain.from_iterable(mask_path))            
             
-        raw_path = list(itertools.chain.from_iterable(raw_path))
+            raw_path = list(itertools.chain.from_iterable(raw_path))                
+                    
         
         raw_paths.append(raw_path)
             
@@ -623,11 +624,11 @@ for k in range(K):
     
     if params.architecture == "UNet_with_Residuals":
         
-        net = models.UNet_with_Residuals(2).cuda()
+        net = models.UNet_with_Residuals().cuda()
+    
+    elif params.architecture == "UNet_with_ResidualsPretrained":
         
-        print(net)
-        
-        utilities.print_num_params(net)
+        net = UNet_with_ResidualsPretrained().cuda()
         
         # MORE MODELS TO COME!!!        
         #    elif params.arch_type == "VGG11":
@@ -636,6 +637,11 @@ for k in range(K):
     else:
         
         print("Error: Architecture " + params.architecture + " not found.")
+    
+    
+    print(net)
+        
+    utilities.print_num_params(net)
     
     
     # Xavier initialization of CNN weights

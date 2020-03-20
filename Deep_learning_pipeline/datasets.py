@@ -26,7 +26,7 @@ import random
 
 import augmentation2D # Augmentation for 2D
 
-
+import matplotlib.pyplot as plt
 
 
 
@@ -156,9 +156,8 @@ class QFlowDataset(data.Dataset):
                 if not(params.three_D):
                     
                     mask_array = mask_array[:,:,0]
-                    
-                    
-                Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
+                
+                
             
             
             else:
@@ -272,7 +271,14 @@ class QFlowDataset(data.Dataset):
                         augm = Augmentation(img, mask_array)
                         
                         img, mask_array = augm.__main__()
-                
+                        
+                        if not('both' in params.train_with):
+                            
+                            img = img[0,:,:,:,:]
+                            
+                            mask_array = mask_array[0,:,:,:]
+
+                        
                     
                     else:
                         
@@ -280,13 +286,19 @@ class QFlowDataset(data.Dataset):
                         
                         img, mask_array = augm2D.__main__()
                         
-        
+                
+
         
             X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float()
+
+            Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
+            
+            
         
             if not(params.three_D):
                 
                 X = X.permute(-1,0,1) # Channels first
+                
         
             else:
                 

@@ -14,6 +14,8 @@ import random
 import sys
 
 import params
+
+import matplotlib.pyplot as plt
     
     
 
@@ -164,8 +166,8 @@ class Augmentation:
         
         out_params = self.parameterRandomization()
         
-        transform = np.array([[out_params[1]*np.cos(out_params[2]),-out_params[1]*np.sin(out_params[2])],
-                             [out_params[1]*np.sin(out_params[2]),out_params[1]*np.cos(out_params[2])]])
+        transform = np.array([[out_params[0]*np.cos(out_params[1]),-out_params[0]*np.sin(out_params[1])],
+                             [out_params[0]*np.sin(out_params[1]),out_params[0]*np.cos(out_params[1])]])
         
         c_in = 0.5*np.array((self.img.shape[1], self.img.shape[2]))
         
@@ -211,13 +213,14 @@ class Augmentation:
         
         final_seg = trans[:,:,:,:,-1]
         
-        final_img = np.squeeze(final_img)
+        if 'both' in params.train_with:
         
-        final_seg = np.squeeze(final_seg)
+            final_img = np.squeeze(final_img)
+
+            final_seg = np.squeeze(final_seg)
             
             
         return final_img, final_seg
-
 
 # To run in terminal:
 

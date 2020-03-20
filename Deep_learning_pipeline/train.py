@@ -431,19 +431,19 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                     # Save the model if the validation score increases with respect to previous iterations
                         
-                    if new_dice > prev_dice:
+                    #if new_dice > prev_dice:
                         
-                        state = {'iteration': i + 1, 'state_dict': net.state_dict(),
-                                 'optimizer': optimizer.state_dict(), 'loss': loss, 
-                                 'best_dice': new_dice}
+                        #state = {'iteration': i + 1, 'state_dict': net.state_dict(),
+                                 #'optimizer': optimizer.state_dict(), 'loss': loss, 
+                                 #'best_dice': new_dice}
                     
-                        filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
+                        #filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
                         
-                        torch.save(state, params.network_data_path + filename)
+                        #torch.save(state, params.network_data_path + filename)
                         
-                        print('Saved model\n')
+                        #print('Saved model\n')
                     
-                        prev_dice = new_dice
+                        #prev_dice = new_dice
                     
                     
                     for l in range(len(results_eval)):

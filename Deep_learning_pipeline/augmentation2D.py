@@ -20,6 +20,10 @@ import time
 
 import cv2
 
+from PIL import Image,ImageEnhance
+
+import random
+
 
 
 class Augmentations2D:
@@ -116,8 +120,6 @@ class Augmentations2D:
         
         return img_final, mask
     
-
-
 
 #test_file = 'CKD2_CKD021_MRI3_dx_mag_0.vtk'
 #
