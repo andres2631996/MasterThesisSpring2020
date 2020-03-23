@@ -111,3 +111,5 @@ Requires to have installed: NumPy, time, os, shutil, runpy, "params.py", folder 
 
 "listen_paus.py" is a special file designed to pause training. It is not in use for now.
 
+"convlstm.py" contains different implementations of ConvLSTM cells to be used in 2D+time architectures in "models.py". The actual code is not mine, but from 
+"https://github.com/ndrplz/ConvLSTM_pytorch" GitHub repository
