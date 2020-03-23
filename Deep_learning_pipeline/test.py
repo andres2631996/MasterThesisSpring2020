@@ -55,8 +55,6 @@ class testing:
         
         - mask_filename: corresponding list of mask filenames (None if not available)
         
-        - pha_filename: corresponding phase filename
-        
         - model: model with which to test images
         
         - flow_path: list of folder(s) with flow information (study dependent)
@@ -452,7 +450,7 @@ class testing:
             
             img_arrays.append(img_array)
             
-            if not(params.three_D):
+            if not(params.three_D) and params.sum_work:
         
                 sum_t_list.append(np.sum(img_array, axis = -1))
             
@@ -516,11 +514,21 @@ class testing:
         
         if params.architecture == "UNet_with_Residuals":
         
-            net = models.UNet_with_Residuals(2).cuda()
+            net = models.UNet_with_Residuals().cuda()
             
             print(net)
             
             utilities.print_num_params(net)
+        
+        elif params.architecture == "UNet_with_ResidualsPretrained":
+        
+            net = UNet_with_ResidualsPretrained().cuda()
+            
+            print(net)
+            
+            utilities.print_num_params(net) 
+            
+            # MORE MODELS TO COME!!!
         
         else:
             
@@ -649,7 +657,7 @@ class testing:
         
         names = np.loadtxt(self.venc_path + 'venc_files.txt', dtype = 'str')
         
-        study = img_filename[:5]
+        study = img_filename[:4]
         
         if 'BF' in params.train_with:
         
@@ -662,6 +670,11 @@ class testing:
         elif params.train_with == 'pha':
             
             name = img_filename.replace('pha_','')
+        
+        
+        if params.prep_step != 'raw':
+            
+            name = name.replace('_' + params.prep_step, '')
         
         
         name = name.replace('.vtk','')
@@ -680,7 +693,7 @@ class testing:
             
             vel_array = phase_array/2
         
-        elif study == 'hero':
+        elif study == 'hero' or study == 'Hero':
             
             min_pha = np.amin(phase_array)
             
@@ -698,7 +711,7 @@ class testing:
 
                 vel_array = aux_array/2
         
-        elif study == 'extr':
+        elif study == 'extr' or study == 'Extr':
             
             # Analyze extra images
             
@@ -886,14 +899,20 @@ class testing:
                             out = torch.zeros(1, X.shape[-3], X.shape[-2], X.shape[-1])
                             
                             for k in range(X.shape[-1]):
+
+                                if len(sum_t_list) > 0:
+                                    
+                                    X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list), X.shape[2], X.shape[3])
                                 
-                                X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list), X.shape[2], X.shape[3])
+                                    X_aux[:, :X.shape[1],:,:] = X[:,:,:,:,k]
+
+                                    X_aux[:, X.shape[1]:,:,:] = torch.tensor(np.array(sum_t_list))
+
+                                    out_aux = model(X_aux.cuda(non_blocking=True)).data
                                 
-                                X_aux[:, :X.shape[1],:,:] = X[:,:,:,:,k]
-                                
-                                X_aux[:, X.shape[1]:,:,:] = torch.tensor(np.array(sum_t_list))
-                                
-                                out_aux = model(X_aux.cuda(non_blocking=True)).data
+                                else:
+                                    
+                                    out_aux = model(X[:,:,:,:,k].cuda(non_blocking=True)).data
     
                                 out[:,:,:,k] = torch.argmax(out_aux, 1).cpu() # Inference output
                         
@@ -958,11 +977,11 @@ class testing:
                         
                         if 'pha' in params.train_with:
                             
-                            pha_array = X[0,0,:,:,:]
+                            pha_array = X[0,0,:,:,:].numpy()
                         
                         elif 'both' in params.train_with:
                             
-                            pha_array = X[0,1,:,:,:]
+                            pha_array = X[0,1,:,:,:].numpy()
                         
                         else:
                             
@@ -973,10 +992,8 @@ class testing:
                             else:
         
                                 pha_filename = self.img_filename[i][0].replace('mag','pha')
-                            
-                            
-                                
-                        pha_array, origin, spacing = self.readVTK(self.img_path[i], pha_filename)
+   
+                            pha_array, origin, spacing = self.readVTK(self.img_path[i], pha_filename)
 
                         # Obtain array with velocities (cm/s)
 
@@ -1031,7 +1048,7 @@ class testing:
                             
                             plt.ylabel('Flow (ml/s)')
                             
-                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[i][0]) + '.png')
+                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[i][0][:-4]) + '.png')
                             
                             
                             fig = plt.figure(figsize = (13,5))
@@ -1109,7 +1126,7 @@ class testing:
                             ind = self.img_filename[i][0].index(orient)
                                 
                             
-                            ind_txt = [i for i, s in enumerate(txt_files) if self.img_filename[i][0][:ind + 2] in s]
+                            ind_txt = [j for j, s in enumerate(txt_files) if self.img_filename[i][0][:ind + 2] in s]
                             
                             ind_final = -1
                             
@@ -1150,9 +1167,9 @@ class testing:
                             
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), mean_v/np.max(np.abs(mean_v)), 'b', label = 'Ground truth')
+                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), np.abs(mean_v/np.max(np.abs(mean_v))), 'b', label = 'Ground truth')
                             
-                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), result_flows[-1][0]/np.max(np.abs(result_flows[-1][0])), 'r', label = 'Result')
+                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), np.abs(result_flows[-1][0]/np.max(np.abs(result_flows[-1][0]))), 'r', label = 'Result')
                             
                             plt.title('Normalized flow comparison')
                             
@@ -1162,7 +1179,7 @@ class testing:
                             
                             plt.legend()
                             
-                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[i][0][:-3]) + '.png')
+                            fig.savefig(self.dest_path + 'flow_comparison' + str(self.img_filename[i][0][:-4]) + '.png')
        
         
                             # Save segmentation results

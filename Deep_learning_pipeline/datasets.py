@@ -28,6 +28,8 @@ import augmentation2D # Augmentation for 2D
 
 import matplotlib.pyplot as plt
 
+import os
+
 
 
 
@@ -130,7 +132,98 @@ class QFlowDataset(data.Dataset):
         sum_t, _, _ = self.readVTK(new_path)
         
         return sum_t[:,:,0]
+    
+    
+    
+    def addNeighbors(self, path, central_array):
         
+        """
+        Create a 2D+time array with given past and future neighbors from 
+        "add3d" parameter in "params.py"
+        
+        Params:
+        
+            - path: path of central slice
+            
+            - central_array: 2D central array
+            
+        Returns:
+        
+            - final_array: output 2D+time array with past and future neighbors
+        
+        """
+        
+        
+        final_array = np.zeros((central_array.shape[0], central_array.shape[1], 2*params.add3d + 1))
+                        
+        final_array[:,:,params.add3d] = central_array
+
+        # Find all slice files to be considered neighboring slices
+
+        reversed_path = path[::-1]
+
+        ind = -(reversed_path.index('/') + 1)
+
+        slices_folder = sorted(os.listdir(path[:ind + 1])) # All slice files found in the same folder
+
+        all_slices = sorted([s for s in slices_folder if path[(ind + 1):(-7)] in s]) # All slice filenames of the same volume
+
+        num_slices = len(all_slices)
+
+        # Get slice index of central slice
+
+        key_str = path[-6:]
+
+        if key_str[0] == 'e':
+
+            slice_ind = int(path[-5])
+
+        else:
+
+            slice_ind = int(key_str[:2])
+
+        cont = 0
+
+        for n in range(params.add3d, 0, -1):
+
+            # Build dataset with neighboring slices
+
+            # Get past index
+
+            if slice_ind - n < 0:
+
+                ind_past = num_slices - n
+
+            else:
+
+                ind_past = slice_ind - n
+
+            # Get future index
+
+            if slice_ind + n > num_slices - 1:
+
+                ind_future = slice_ind + n - num_slices
+
+            else:
+
+                ind_future = slice_ind + n
+
+            past_file = path.replace(str(slice_ind) + '.vtk', str(ind_past) + '.vtk')
+
+            future_file = path.replace(str(slice_ind) + '.vtk', str(ind_future) + '.vtk')
+
+            past_array,_,_ = self.readVTK(past_file)
+
+            future_array,_,_ = self.readVTK(future_file)
+
+            final_array[:,:,cont] = past_array[:,:,0]
+
+            final_array[:,:,-cont-1] = future_array[:,:,0]
+
+            cont += 1
+            
+        return final_array
+
 #
     def __getitem__(self, index):
 
@@ -156,9 +249,10 @@ class QFlowDataset(data.Dataset):
                 if not(params.three_D):
                     
                     mask_array = mask_array[:,:,0]
-                
-                
-            
+                    
+                    if params.add3d > 0:
+                        
+                        mask_array = self.addNeighbors(mask_path, mask_array) # Surround central slice with past and future neighbors
             
             else:
                 
@@ -173,7 +267,7 @@ class QFlowDataset(data.Dataset):
             
             # Compute number of channels
         
-            if params.three_D or not(params.sum_work):
+            if params.three_D or (not params.three_D and not(params.sum_work)):
                 
                 if 'both' in params.train_with:
                 
@@ -196,24 +290,36 @@ class QFlowDataset(data.Dataset):
 
  
             raw,_,_ = self.readVTK(raw_path)
+    
+            if not(params.three_D):
             
-            if not(params.three_D): # 2D VTK files only have one slice in T
+                raw = raw[:,:,0]
+    
+            if params.add3d > 0:
+            
+                raw = self.addNeighbors(raw_path, raw) # Surround central slice with past and future neighbors
+            
+            if not(params.three_D) and params.add3d == 0: # 2D VTK files only have one slice in T
                 
                 img = np.zeros((raw.shape[0], raw.shape[1], channels))
             
-            else:
+            elif params.three_D and params.add3d == 0:
             
                 img = np.zeros((raw.shape[0], raw.shape[1], raw.shape[2],channels))
             
+            elif not(params.three_D) and params.add3d > 0:
+                
+                img = np.zeros((raw.shape[0], raw.shape[1], params.add3d*2 + 1,channels))
+            
             if not('both' in params.train_with):
                 
-                if params.three_D:
+                if params.three_D or (not(params.three_D) and params.add3d > 0):
                 
                     img[:,:,:,0] = raw
                 
                 else:
                     
-                    img[:,:,0] = raw[:,:,0]
+                    img[:,:,0] = raw
                     
                     if params.sum_work: # Work with extra channel with sum of time frames
                     
@@ -234,8 +340,13 @@ class QFlowDataset(data.Dataset):
     
                 
                 pha_array,_,_ = self.readVTK(pha_path)
+            
+                if params.add3d > 0:
+                    
+                    pha_array = self.addNeighbors(pha_path, pha_array[:,:,0]) # Surround central slice with past and future neighbors
+                    
                 
-                if params.three_D:
+                if params.three_D or (not(params.three_D) and params.add3d > 0):
                 
                     img[:,:,:,0] = raw
                     
@@ -262,7 +373,7 @@ class QFlowDataset(data.Dataset):
                 
                 if augm_chance < params.augm_probs[0]:
     
-                    if params.three_D:
+                    if params.three_D or (not(params.three_D) and params.add3d > 0):
                         
                         img = np.expand_dims(img, axis = 0)
                     
@@ -295,14 +406,14 @@ class QFlowDataset(data.Dataset):
             
             
         
-            if not(params.three_D):
+            if params.three_D or (not(params.three_D) and params.add3d > 0):
                 
-                X = X.permute(-1,0,1) # Channels first
+                X = X.permute(-1,0,1,2) # Channels first
                 
         
             else:
                 
-                X = X.permute(-1,0,1,2) # Channels first
+                X = X.permute(-1,0,1) # Channels first
             
             
             if len(self.mask_paths) != 0:

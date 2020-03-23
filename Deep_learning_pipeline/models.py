@@ -18,6 +18,8 @@ from torchvision import models
 
 import numpy as np
 
+from convlstm import ConvLSTM
+
 
 class Concat(nn.Module):
     
@@ -300,8 +302,8 @@ class UNet_with_Residuals(nn.Module):
                 
 
         self.Rd1 = Res_Down(params.base, params.base*2, params.kernel_size, params.padding)
-        self.Rd2 = Res_Down(params.base*2, params.base*4, params.kernel_size, params.padding)
-        self.Rd3 = Res_Down(params.base*4, params.base*4, params.kernel_size, params.padding)
+        self.Rd2 = Res_Down(params.base*2, params.base*2, params.kernel_size, params.padding)
+        #self.Rd3 = Res_Down(params.base*4, params.base*4, params.kernel_size, params.padding)
         #self.Rd4 = Res_Down(params.base*8, params.base*8, params.kernel_size, params.padding)
         
         self.fudge = nn.ConvTranspose2d(params.base*4, params.base*4, params.kernel_size, stride = (1,1),\
@@ -309,8 +311,8 @@ class UNet_with_Residuals(nn.Module):
 
         
         #self.Ru3 = Res_Up(params.base*8, params.base*8, params.kernel_size, params.padding)
-        self.Ru2 = Res_Up(params.base*4, params.base*4, params.kernel_size, params.padding)
-        self.Ru1 = Res_Up(params.base*4, params.base*2, params.kernel_size, params.padding)
+        #self.Ru2 = Res_Up(params.base*4, params.base*4, params.kernel_size, params.padding)
+        self.Ru1 = Res_Up(params.base*2, params.base*2, params.kernel_size, params.padding)
         self.Ru0 = Res_Up(params.base*2, params.base, params.kernel_size, params.padding)
 
         
@@ -332,23 +334,23 @@ class UNet_with_Residuals(nn.Module):
 
         e1 = self.Rd1(e0)
         e2 = self.drop(self.Rd2(e1))
-        e3 = self.drop(self.Rd3(e2))
+        #e3 = self.drop(self.Rd3(e2))
         #e4 = self.Rd4(e3)
 
 
         #d3 = self.Ru3(e4)
-        d2 = self.Ru2(e3)
-        
-        if d2.shape[2] != e2.shape[2]:
-            
-            e2 = self.pad(e2)
-        
-        #d2 = self.Ru2(self.cat(d3[:,(params.base*4):],e3[:,(params.base*4):]))
-        d1 = self.Ru1(self.cat(d2[:,(params.base*2):],e2[:,(params.base*2):]))
+        d1 = self.Ru1(e2)
         
         if d1.shape[2] != e1.shape[2]:
-        
+            
             e1 = self.pad(e1)
+        
+        #d2 = self.Ru2(self.cat(d3[:,(params.base*4):],e3[:,(params.base*4):]))
+        #d1 = self.Ru1(self.cat(d2[:,(params.base*2):],e2[:,(params.base*2):]))
+        
+        #if d1.shape[2] != e1.shape[2]:
+        
+            #e1 = self.pad(e1)
             
         d0 = self.Ru0(self.cat(d1[:,params.base:],e1[:,params.base:]))
         
@@ -381,15 +383,19 @@ class pretrainedEncoder(nn.Module):
         
     def forward(self,x):
         
-        modules = list(self.resnet.children())[:(params.num_layers - 6)]
+        modules = list(self.resnet.children())[:(params.num_layers - 8)]
         
         #resnet = nn.Sequential(*modules)
         
         inter_results = []
         
-        layersInterest = [2,4,5]
+        layersInterest = [2]
         
         for i in range(len(modules)):
+            
+            for param in modules[i].parameters():
+            
+                param.requires_grad = False # Do not need to train this part of the model
             
             x = modules[i](x)
             
@@ -492,14 +498,14 @@ class UNet_with_ResidualsPretrained(nn.Module):
         
         self.pad = addRowCol()
         
-        self.fudge = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**((params.num_layers - 1))), params.kernel_size, stride = (2,2),\
+        self.fudge = nn.ConvTranspose2d(params.base, params.base, params.kernel_size, stride = (2,2),\
                 padding = params.padding)
         
-        self.Ru2 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
+        #self.Ru2 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
         
-        self.Ru1 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
+        #self.Ru1 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
         
-        self.Ru0 = Res_Up(params.base*(2**(params.num_layers - 2)), params.base, params.kernel_size, params.padding)
+        self.Ru0 = Res_Up(params.base, params.base, params.kernel_size, params.padding)
         
         self.fudge2 = nn.ConvTranspose2d(params.base, params.base, params.kernel_size, stride = (2,2), padding = params.padding)
         
@@ -517,10 +523,14 @@ class UNet_with_ResidualsPretrained(nn.Module):
         # Pretrained encoder
         
         e, inter = self.encoder(x)
-
-        e = self.fudge(e)
         
-        e = self.pad(e)
+        #print(e.shape, inter[-1].shape, inter[-2].shape)
+
+        #e = self.fudge(e)
+        
+        #e = self.pad(e)
+        
+        #print(e.shape)
         
         # Decoder
 
@@ -533,21 +543,22 @@ class UNet_with_ResidualsPretrained(nn.Module):
             #d2 = self.pad(d2)
         
         
-        d1 = self.Ru1(self.cat(e[:,(params.base*2):],inter[-1]))
+        #d1 = self.Ru1(self.cat(e[:,(params.base*2):],inter[-1]))
         
-        if d1.shape[2] != inter[-2].shape[2]:
+        #if d1.shape[2] != inter[-2].shape[2]:
         
-            d1 = self.pad(d1)
+            #d1 = self.pad(d1)
+        
 
-        d0 = self.Ru0(self.cat(d1[:,params.base:],inter[-2]))
+        d0 = self.Ru0(e)
         
         # Final layer
         
-        if d0.shape[2] != inter[-3].shape[2]:
+        if d0.shape[2] != inter[-1].shape[2]:
             
             d0 = self.pad(d0)
 
-        out = self.fudge2(self.cat(inter[-3][:,(params.base//2):],d0[:,(params.base//2):]))
+        out = self.fudge2(self.cat(inter[-1][:,(params.base//2):],d0[:,(params.base//2):]))
         
         out = self.pad(out)
         
@@ -555,3 +566,46 @@ class UNet_with_ResidualsPretrained(nn.Module):
 
 
         return out
+    
+    
+class UNetLSTM(nn.Module):
+    
+    """
+    U-Net with convLSTM operators in the encoder, to process 2D+time information
+    
+    """
+    
+    
+    def __init__(self):
+        
+        super(UNetLSTM, self).__init__()
+        
+        self.cat = Concat()
+        
+        self.pad = addRowCol()
+        
+        # Reshape
+        
+        self.conv1 = nn.Conv2d(in_chan, params.base, params.kernel_size, padding=params.padding)
+                    
+        self.bn1 = EncoderNorm_2d(params.base)
+
+        self.drop = nn.Dropout2d(params.dropout)
+
+        self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
+        
+        self.bn2 = EncoderNorm_2d(params.base)
+        
+        if 'both' in params.train_with:
+            
+            channels = 2
+            
+        else:
+            
+            channels = 1
+            
+        # Reshape
+        
+        self.convlstm1 = ConvLSTM(params.base, params.base*2, params.kernel_size, 1, True, True, False)
+        
+        self.c

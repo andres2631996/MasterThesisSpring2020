@@ -47,6 +47,8 @@ train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
+add3d = 0 # Number of past and future neighboring slices to build a 2.5D dataset
+
 sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
@@ -56,15 +58,15 @@ channel_count = 1 # Channel counter
 
 augmentation = True
 
-augm_params = [0.15, 0.9, 15] # Augmentation limit parameters: maximum mean noise amplitude, maximum scale and maximum degree rotation
+augm_params = [0.15, 10] # Augmentation limit parameters: maximum mean noise amplitude, maximum scale and maximum degree rotation
 
-augm_probs = [0.5]*5 # Probabilities for each augmentation event
+augm_probs = [1]*5 # Probabilities for each augmentation event
 
 # Optional 2D augmentation with albumentations
 
-augm2D_limits = [0.9, 15] # Augmentation limit parameters: contrast, Brightness, Scale, Rotation, Flip, Elastic Deformation
+augm2D_limits = [0.95, 10] # Augmentation limit parameters: contrast, Brightness, Scale, Rotation, Flip, Elastic Deformation
 
-augm2D_probs = [0.5]*3
+augm2D_probs = [0.5]*5
 
 # Cross-validation parameters
 
@@ -129,14 +131,14 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 10000
+I = 100000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*3000
+eval_frequency = batch_size*5000
 
-loss_frequency = batch_size*500
+loss_frequency = batch_size*1000
 
 opt = 'Adam' # Optimizer to be used. Can be Adam/RMSprop/SGD
 
@@ -144,15 +146,13 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.00001 # Learning rate
+lr = 0.000001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
 step = I/10 # Step for LR scheduling
 
 lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
-
-pre_training = False # Use some pre-trained architecture
 
 num_layers = 3 # Number of encoder and decoder layers to be used
 
