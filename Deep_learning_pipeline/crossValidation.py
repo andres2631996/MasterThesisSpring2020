@@ -236,14 +236,14 @@ def extractVTKfilesStratification(patient_paths):
                     
                         if modality == 'mag':
                             
-                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+                            raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
 
                     
                     elif params.train_with == 'pha':
                         
                         if modality == 'pha':
                             
-                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+                            raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
 
 
                     
@@ -251,21 +251,21 @@ def extractVTKfilesStratification(patient_paths):
                         
                         if modality == 'magBF':
                             
-                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+                            raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
 
                     
                     elif params.train_with == 'both':
                         
                         if modality == 'mag':
                             
-                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+                            raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
 
                         
                     elif params.train_with == 'bothBF':
                         
                         if modality == 'magBF':
                             
-                            raw_path.append([modality_path + item for item in images if not('sum' in item)])
+                            raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
 
                     
                     if modality == 'msk':
@@ -629,6 +629,14 @@ for k in range(K):
     elif params.architecture == "UNet_with_ResidualsPretrained":
         
         net = UNet_with_ResidualsPretrained().cuda()
+        
+    elif params.architecture == "NewUNet_with_Residuals":
+        
+        net = models.NewUNet_with_Residuals().cuda() 
+        
+    elif params.architecture == "UNetRNN":
+        
+        net = models.UNetRNN().cuda()
         
         # MORE MODELS TO COME!!!        
         #    elif params.arch_type == "VGG11":

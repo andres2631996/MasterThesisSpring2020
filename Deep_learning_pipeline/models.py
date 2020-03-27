@@ -18,7 +18,7 @@ from torchvision import models
 
 import numpy as np
 
-from convlstm import ConvLSTM
+from convRNNs import ConvLSTM, ConvGRU
 
 
 class Concat(nn.Module):
@@ -106,11 +106,20 @@ class Res_Down(nn.Module):
     def __init__(self, in_chan, out_chan, kernel, padding):
         
         super(Res_Down, self).__init__()
-
-        self.conv1 = nn.Conv2d(in_chan, out_chan, kernel + 1, stride = (2,2),\
-                padding=(1,1))
+        
+        if params.architecture == 'NewUNet_with_Residuals':
             
-        self.bn1 = EncoderNorm_2d(out_chan)
+            self.conv1 = nn.Conv2d(in_chan, out_chan, kernel, stride = (1,1),\
+                    padding=padding)
+        
+        else:
+
+            self.conv1 = nn.Conv2d(in_chan, out_chan, kernel + 1, stride = (2,2),\
+                    padding=padding)
+        
+        if params.normalization is not None:
+            
+            self.bn1 = EncoderNorm_2d(out_chan)
             
         #self.drop = nn.Dropout2d(params.dropout)
 
@@ -124,9 +133,17 @@ class Res_Down(nn.Module):
 
     def forward(self, x):
         
-        x = F.relu(self.bn1(self.conv1(x)))
+        if params.normalization is not None:
         
-        out = self.bn2(self.conv2(x))
+            x = F.relu(self.bn1(self.conv1(x)))
+
+            out = self.bn2(self.conv2(x))
+            
+        else:
+            
+            x = F.relu(self.conv1(x))
+            
+            out = self.conv2(x)
 
         return F.relu(x + out)
 
@@ -157,22 +174,41 @@ class Res_Up(nn.Module):
     def __init__(self, in_chan, out_chan, kernel, padding):
         
         super(Res_Up, self).__init__()
-
-        self.conv1 = nn.ConvTranspose2d(in_chan, out_chan, kernel + 1, stride = (2,2),\
-                padding=padding)
         
-        self.bn1 = EncoderNorm_2d(out_chan)
+        if params.architecture == 'NewUNet_with_Residuals':
+            
+            self.conv1 = nn.ConvTranspose2d(in_chan, out_chan, kernel, stride = (1,1),\
+                    padding=padding)
+            
+        else:
+
+            self.conv1 = nn.ConvTranspose2d(in_chan, out_chan, kernel + 1, stride = (2,2),\
+                    padding=padding)
+        
+        if params.normalization is not None:
+        
+            self.bn1 = EncoderNorm_2d(out_chan)
 
         self.conv2 = nn.Conv2d(out_chan, out_chan, kernel, padding=padding)
         
-        self.bn2 = EncoderNorm_2d(out_chan)
+        if params.normalization is not None:
+        
+            self.bn2 = EncoderNorm_2d(out_chan)
 
 
     def forward(self, x):
         
-        x = F.relu(self.bn1(self.conv1(x)))
+        if params.normalization is not None:
         
-        out = self.bn2(self.conv2(x))
+            x = F.relu(self.bn1(self.conv1(x)))
+
+            out = self.bn2(self.conv2(x))
+            
+        else:
+            
+            x = F.relu(self.conv1(x))
+
+            out = self.conv2(x)
 
         return F.relu(x + out)
     
@@ -221,7 +257,9 @@ class Res_Final(nn.Module):
 
         self.conv1 = nn.Conv2d(in_chan, in_chan, kernel, padding=padding)
         
-        self.bn1 = EncoderNorm_2d(in_chan)
+        if params.normalization is not None:
+        
+            self.bn1 = EncoderNorm_2d(in_chan)
         
         #self.drop = nn.Dropout2d(params.dropout)
 
@@ -232,12 +270,19 @@ class Res_Final(nn.Module):
 
     def forward(self, x):
         
-        out = F.relu(self.bn1(self.conv1(x)))
+        if params.normalization is not None:
+        
+            out = F.relu(self.bn1(self.conv1(x)))
+        
+        else:
+            
+            out = F.relu(self.conv1(x))
         
         out = self.conv2(x + out)
 
 
         return out
+    
 
     
 class addRowCol(nn.Module):
@@ -258,6 +303,7 @@ class addRowCol(nn.Module):
         final = torch.cat((new, new_col),3)
         
         return final
+    
 
 
 class UNet_with_Residuals(nn.Module):
@@ -280,25 +326,33 @@ class UNet_with_Residuals(nn.Module):
         
         if params.sum_work and 'both' in params.train_with:
             
-            in_chan = 4 # Train with magnitude + phase + sum of both along time
+            in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
         
-        elif (params.sum_work and not('both' in params.train_with)) or (not(params.sum_work) and 'both' in params.train_with):
+        elif (params.sum_work and not('both' in params.train_with)):
             
-            in_chan = 2 # Train with magnitude or phase and sum in time // Train with magnitude + phase (no sum)
+            in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+            
+        elif (not(params.sum_work) and 'both' in params.train_with):
+            
+            in_chan = 2 # Train with magnitude + phase (no sum)
             
         elif not(params.sum_work) and not('both' in params.train_with):
         
             in_chan = 1 # Train magnitude or phase (no sum)
 
         self.conv1 = nn.Conv2d(in_chan, params.base, params.kernel_size, padding=params.padding)
+        
+        if params.normalization is not None:
                     
-        self.bn1 = EncoderNorm_2d(params.base)
+            self.bn1 = EncoderNorm_2d(params.base)
 
         self.drop = nn.Dropout2d(params.dropout)
 
         self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
         
-        self.bn2 = EncoderNorm_2d(params.base)
+        if params.normalization is not None:
+        
+            self.bn2 = EncoderNorm_2d(params.base)
                 
 
         self.Rd1 = Res_Down(params.base, params.base*2, params.kernel_size, params.padding)
@@ -326,11 +380,17 @@ class UNet_with_Residuals(nn.Module):
 
     def forward(self, x):
         
-        out = F.relu(self.bn1(self.conv1(x)))
+        if params.normalization is not None:
         
-        e0 = F.relu(self.bn2(self.conv2(out)))
+            out = F.relu(self.bn1(self.conv1(x)))
+
+            e0 = F.relu(self.bn2(self.conv2(out)))
+            
+        else:
         
-        
+            out = F.relu(self.conv1(x))
+
+            e0 = F.relu(self.conv2(out))
 
         e1 = self.Rd1(e0)
         e2 = self.drop(self.Rd2(e1))
@@ -364,7 +424,233 @@ class UNet_with_Residuals(nn.Module):
 
         return out
     
+class UNet_with_ResidualsFourLayers(nn.Module):
     
+    """
+    U-Net with residuals architecture, extracted from Bratt et al., 2019 paper, with four layers
+    
+    
+    """
+
+    def __init__(self):
+        
+        super(UNet_with_ResidualsFourLayers, self).__init__()
+
+        self.cat = Concat()
+        
+        self.pad = addRowCol()
+        
+        # Decide on number of input channels
+        
+        if params.sum_work and 'both' in params.train_with:
+            
+            in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
+        
+        elif (params.sum_work and not('both' in params.train_with)):
+            
+            in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+            
+        elif (not(params.sum_work) and 'both' in params.train_with):
+            
+            in_chan = 2 # Train with magnitude + phase (no sum)
+            
+        elif not(params.sum_work) and not('both' in params.train_with):
+        
+            in_chan = 1 # Train magnitude or phase (no sum)
+
+        self.conv1 = nn.Conv2d(in_chan, params.base, params.kernel_size, padding=params.padding)
+        
+        if params.normalization is not None:
+                    
+            self.bn1 = EncoderNorm_2d(params.base)
+
+        self.drop = nn.Dropout2d(params.dropout)
+
+        self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
+        
+        if params.normalization is not None:
+        
+            self.bn2 = EncoderNorm_2d(params.base)
+                
+
+        self.Rd1 = Res_Down(params.base, params.base*2, params.kernel_size, params.padding)
+        self.Rd2 = Res_Down(params.base*2, params.base*4, params.kernel_size, params.padding)
+        self.Rd3 = Res_Down(params.base*4, params.base*4, params.kernel_size, params.padding)
+        #self.Rd4 = Res_Down(params.base*8, params.base*8, params.kernel_size, params.padding)
+        
+        self.fudge = nn.ConvTranspose2d(params.base*4, params.base*4, params.kernel_size, stride = (1,1),\
+                padding = params.padding)
+
+        
+        #self.Ru3 = Res_Up(params.base*8, params.base*8, params.kernel_size, params.padding)
+        self.Ru2 = Res_Up(params.base*4, params.base*4, params.kernel_size, params.padding)
+        self.Ru1 = Res_Up(params.base*4, params.base*2, params.kernel_size, params.padding)
+        self.Ru0 = Res_Up(params.base*2, params.base, params.kernel_size, params.padding)
+
+        
+
+#        self.Ru3 = Res_Up(512,512)
+#        self.Ru2 = Res_Up(512,256)
+#        self.Ru1 = Res_Up(256,128)
+#        self.Ru0 = Res_Up(128,64)
+
+        self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
+
+    def forward(self, x):
+        
+        if params.normalization is not None:
+        
+            out = F.relu(self.bn1(self.conv1(x)))
+
+            e0 = F.relu(self.bn2(self.conv2(out)))
+            
+        else:
+        
+            out = F.relu(self.conv1(x))
+
+            e0 = F.relu(self.conv2(out))
+
+        e1 = self.Rd1(e0)
+        e2 = self.drop(self.Rd2(e1))
+        e3 = self.drop(self.Rd3(e2))
+        #e4 = self.Rd4(e3)
+
+
+        #d3 = self.Ru3(e4)
+        d2 = self.Ru1(e3)
+        
+        if d2.shape[2] != e2.shape[2]:
+            
+            e2 = self.pad(e2)
+        
+        #d2 = self.Ru2(self.cat(d3[:,(params.base*4):],e3[:,(params.base*4):]))
+        d1 = self.Ru1(self.cat(d2[:,(params.base*2):],e2[:,(params.base*2):]))
+        
+        if d1.shape[2] != e1.shape[2]:
+        
+            e1 = self.pad(e1)
+            
+        d0 = self.Ru0(self.cat(d1[:,params.base:],e1[:,params.base:]))
+        
+        
+        if d0.shape[2] != e0.shape[2]:
+        
+            e0 = self.pad(e0)
+
+        out = self.Rf(self.cat(e0[:,(params.base//2):],d0[:,(params.base//2):]))
+
+
+        return out
+    
+    
+    
+    
+class NewUNet_with_Residuals(nn.Module):
+    
+    """
+    U-Net with residuals architecture, extracted from Bratt et al., 2019 paper
+    
+    
+    """
+
+    def __init__(self):
+        
+        super(NewUNet_with_Residuals, self).__init__()
+
+        self.cat = Concat()
+        
+        self.pad = addRowCol()
+        
+        # Decide on number of input channels
+        
+        if params.sum_work and 'both' in params.train_with:
+            
+            in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
+        
+        elif (params.sum_work and not('both' in params.train_with)):
+            
+            in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+            
+        elif (not(params.sum_work) and 'both' in params.train_with):
+            
+            in_chan = 2 # Train with magnitude + phase (no sum)
+            
+        elif not(params.sum_work) and not('both' in params.train_with):
+        
+            in_chan = 1 # Train magnitude or phase (no sum)
+
+        self.conv1 = nn.Conv2d(in_chan, params.base, params.kernel_size, padding=params.padding)
+        
+        if params.normalization is not None:
+                    
+            self.bn1 = EncoderNorm_2d(params.base)
+
+        self.drop = nn.Dropout2d(params.dropout)
+
+        self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
+        
+        if params.normalization is not None:
+        
+            self.bn2 = EncoderNorm_2d(params.base)
+                
+
+        self.Rd1 = Res_Down(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
+        self.Rd2 = Res_Down(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
+        self.Rd3 = Res_Down(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
+        #self.Rd4 = Res_Down(params.base*8, params.base*8, params.kernel_size, params.padding)
+        
+        self.fudge = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = (1,1),\
+                padding = params.padding)
+
+        
+        #self.Ru3 = Res_Up(params.base*8, params.base*8, params.kernel_size, params.padding)
+        self.Ru2 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
+        self.Ru1 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
+        self.Ru0 = Res_Up(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.kernel_size, params.padding)
+
+        
+
+#        self.Ru3 = Res_Up(512,512)
+#        self.Ru2 = Res_Up(512,256)
+#        self.Ru1 = Res_Up(256,128)
+#        self.Ru0 = Res_Up(128,64)
+
+        self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
+
+    def forward(self, x):
+        
+        if params.normalization is not None:
+        
+            out = F.relu(self.bn1(self.conv1(x)))
+
+            e0 = F.relu(self.bn2(self.conv2(out)))
+            
+        else:
+        
+            out = F.relu(self.conv1(x))
+
+            e0 = F.relu(self.conv2(out))
+
+        e1 = self.Rd1(e0)
+        e2 = self.drop(self.Rd2(e1))
+        e3 = self.drop(self.Rd3(e2))
+        #e4 = self.Rd4(e3)
+
+
+        #d3 = self.Ru3(e4)
+        d2 = self.Ru2(e3)
+        
+        #d2 = self.Ru2(self.cat(d3[:,(params.base*4):],e3[:,(params.base*4):]))
+        d1 = self.Ru1(self.cat(d2[:,(params.base*(2**(params.num_layers - 2))):],e2[:,(params.base*(2**(params.num_layers - 2))):]))
+
+            
+        d0 = self.Ru0(self.cat(d1[:,params.base*(2**(params.num_layers - 3)):],e1[:,params.base*(2**(params.num_layers - 3)):]))
+
+        out = self.Rf(self.cat(e0[:,params.base//2:],d0[:,params.base//2:]))
+
+
+        return out    
+
     
 
 class pretrainedEncoder(nn.Module):
@@ -431,11 +717,15 @@ class pretrainingPreprocessing(nn.Module):
         
         if params.sum_work and 'both' in params.train_with:
             
-            in_chan = 4 # Train with magnitude + phase + sum of both along time
+            in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
         
-        elif (params.sum_work and not('both' in params.train_with)) or (not(params.sum_work) and 'both' in params.train_with):
+        elif (params.sum_work and not('both' in params.train_with)):
             
-            in_chan = 2 # Train with magnitude or phase and sum in time // Train with magnitude + phase (no sum)
+            in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+            
+        elif (not(params.sum_work) and 'both' in params.train_with):
+            
+            in_chan = 2 # Train with magnitude + phase (no sum)
             
         elif not(params.sum_work) and not('both' in params.train_with):
         
@@ -490,7 +780,9 @@ class UNet_with_ResidualsPretrained(nn.Module):
         
         self.cat = Concat()
         
-        self.bn = EncoderNorm_2d(params.base)
+        if params.normalization is not None:
+        
+            self.bn = EncoderNorm_2d(params.base)
 
         self.drop = nn.Dropout2d(params.dropout)
         
@@ -567,34 +859,166 @@ class UNet_with_ResidualsPretrained(nn.Module):
 
         return out
     
+
     
-class UNetLSTM(nn.Module):
+    
+class UNetRNNDown(nn.Module):
     
     """
-    U-Net with convLSTM operators in the encoder, to process 2D+time information
+    Encoder layers of U-Net with convLSTMs
+    
+    """
+    
+    def __init__(self, in_chan, out_chan):
+        
+        super(UNetRNNDown, self).__init__()
+        
+        if params.rnn == 'LSTM':
+
+            self.conv1 = ConvLSTM(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, True, True, False)
+            
+        elif params.rnn == 'GRU':
+            
+            if torch.cuda.is_available():
+                
+                dtype = torch.cuda.FloatTensor # computation in GPU
+                
+            else:
+                
+                dtype = torch.FloatTensor
+            
+            self.conv1 = ConvGRU(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
+            
+        else:
+             
+            print('Wrong recurrent cell introduced. Please introduce a valid name for recurrent cell')
+            
+            
+        
+        if params.normalization is not None:
+            
+            self.bn1 = EncoderNorm_2d(out_chan)
+            
+        #self.drop = nn.Dropout2d(params.dropout)
+
+        self.conv2 = nn.Conv2d(out_chan, out_chan, params.kernel_size + 1, stride = (2,2), padding = params.padding)
+        
+        if params.normalization is not None:
+            
+            self.bn2 = EncoderNorm_2d(out_chan)
+
+
+    def forward(self, x):
+        
+        # Reshape x to enter the convLSTM cell: (BxT,C,H,W) --> (B,T,C,H,W)
+        
+        x = x.view(params.batch_size, x.shape[0]//params.batch_size, x.shape[-3], x.shape[-2], x.shape[-1])
+        
+        # Introduce x into convLSTM
+        
+        x,_ = list(self.conv1(x))
+        
+        # Reshape x again to original shape
+        
+        x = x[0].view(x[0].shape[0]*x[0].shape[1],x[0].shape[-3], x[0].shape[-2], x[0].shape[-1])
+        
+        if params.normalization is not None:
+        
+            x = self.bn2(self.conv2(F.leaky_relu(self.bn1(x))))
+            
+        else:
+            
+            x = self.conv2(F.leaky_relu(x))
+
+        return F.leaky_relu(x)
+    
+    
+class UNetRNNUp(nn.Module):
+    
+    """
+    Decoder layers of U-Net with convLSTMs or convGRUs
+    
+    """
+    
+    def __init__(self, in_chan, out_chan):
+        
+        super(UNetRNNUp, self).__init__()
+        
+        if params.rnn == 'LSTM':
+
+            self.conv1 = ConvLSTM(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, True, True, False)
+            
+        elif params.rnn == 'GRU':
+            
+            if torch.cuda.is_available():
+                
+                dtype = torch.cuda.FloatTensor # computation in GPU
+                
+            else:
+                
+                dtype = torch.FloatTensor
+            
+            self.conv1 = ConvGRU(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
+            
+        else:
+             
+            print('Wrong recurrent cell introduced. Please introduce a valid name for recurrent cell')
+        
+        if params.normalization is not None:
+            
+            self.bn1 = EncoderNorm_2d(out_chan)
+            
+        #self.drop = nn.Dropout2d(params.dropout)
+
+        self.conv2 = nn.ConvTranspose2d(out_chan, out_chan, params.kernel_size + 1, stride = (2,2), padding=(1,1))
+        
+        if params.normalization is not None:
+            
+            self.bn2 = EncoderNorm_2d(out_chan)
+
+
+    def forward(self, x):
+        
+        # Reshape x to enter the convLSTM cell: (BxT,C,H,W) --> (B,T,C,H,W)
+        
+        x = x.view(params.batch_size, x.shape[0]//params.batch_size, x.shape[-3], x.shape[-2], x.shape[-1])
+        
+        # Introduce x into convLSTM
+        
+        x,_ = list(self.conv1(x))
+        
+        # Reshape x again to original shape
+        
+        x = x[0].view(x[0].shape[0]*x[0].shape[1],x[0].shape[-3], x[0].shape[-2], x[0].shape[-1])
+        
+        if params.normalization is not None:
+        
+            x = self.bn2(self.conv2(F.leaky_relu(self.bn1(x))))
+
+            
+        else:
+            
+            x = self.conv2(F.leaky_relu(x))
+
+        return F.leaky_relu(x)
+    
+    
+    
+class UNetRNN(nn.Module):
+    
+    """
+    U-Net with convLSTM or convGRU operators, to process 2D+time information
     
     """
     
     
     def __init__(self):
         
-        super(UNetLSTM, self).__init__()
+        super(UNetRNN, self).__init__()
         
         self.cat = Concat()
         
         self.pad = addRowCol()
-        
-        # Reshape
-        
-        self.conv1 = nn.Conv2d(in_chan, params.base, params.kernel_size, padding=params.padding)
-                    
-        self.bn1 = EncoderNorm_2d(params.base)
-
-        self.drop = nn.Dropout2d(params.dropout)
-
-        self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
-        
-        self.bn2 = EncoderNorm_2d(params.base)
         
         if 'both' in params.train_with:
             
@@ -603,9 +1027,112 @@ class UNetLSTM(nn.Module):
         else:
             
             channels = 1
+        
+        self.conv1 = nn.Conv2d(channels, params.base, params.kernel_size, padding=params.padding)
+        
+        if params.normalization is not None:
+                    
+            self.bn1 = EncoderNorm_2d(params.base)
+
+        self.drop = nn.Dropout2d(params.dropout)
+
+        self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
+        
+        if params.normalization is not None:
+        
+            self.bn2 = EncoderNorm_2d(params.base)
             
-        # Reshape
+        if params.rnn_position == 'encoder' or params.rnn_position == 'full': 
+            
+            self.Rd1 = UNetRNNDown(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)))
+
+            self.Rd2 = UNetRNNDown(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)))
+
+            self.Rd3 = UNetRNNDown(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
+            
+        else:
+            
+            self.Rd1 = Res_Down(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
+            self.Rd2 = Res_Down(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
+            self.Rd3 = Res_Down(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
+            
         
-        self.convlstm1 = ConvLSTM(params.base, params.base*2, params.kernel_size, 1, True, True, False)
         
-        self.c
+        if params.rnn_position == 'decoder' or params.rnn_position == 'full':
+            
+            self.Ru3 = UNetRNNUp(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
+
+            self.Ru2 = UNetRNNUp(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)))
+
+            self.Ru1 = UNetRNNUp(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)))
+            
+        else:
+                
+            self.Ru3 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
+
+            self.Ru2 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
+
+            self.Ru1 = Res_Up(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.kernel_size, params.padding)
+                
+        self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
+        
+        
+        
+    def forward(self, x):
+        
+        # Reshape input: (B, C, H, W, T) --> (B*T, C, H, W)
+        
+        x = x.view(x.shape[0]*x.shape[-1], x.shape[1], x.shape[-3], x.shape[-2])
+        
+        # First convolutional layer
+        
+        if params.normalization is not None:
+        
+            out = F.relu(self.bn1(self.conv1(x)))
+
+            e0 = F.relu(self.bn2(self.conv2(out)))
+            
+        else:
+        
+            out = F.relu(self.conv1(x))
+
+            e0 = F.relu(self.conv2(out))
+            
+        # Encoder layers: convRNN + conv2D
+
+        e1 = self.Rd1(e0)
+        
+        e2 = self.drop(self.Rd2(e1))
+        
+        e3 = self.drop(self.Rd3(e2))
+    
+        # Decoder layers: conv2Dtranspose + conv2d
+        
+        d3 = self.Ru3(e3)
+
+        if d3.shape[2] != e2.shape[2]:
+                    
+            e2 = self.pad(e2)
+                
+        d2 = self.Ru2(self.cat(d3[:,(params.base*(2**(params.num_layers - 2))):],e2[:,(params.base*(2**(params.num_layers - 2))):]))
+        
+        if d2.shape[2] != e1.shape[2]:
+            
+            e1 = self.pad(e1)
+            
+        d1 = self.Ru1(self.cat(d2[:,(params.base*(2**(params.num_layers - 3))):],e1[:,(params.base*(2**(params.num_layers - 3))):]))
+                
+        # Final output layer
+        
+        if d1.shape[2] != e0.shape[2]:
+        
+            e0 = self.pad(e0)
+
+        out = self.Rf(self.cat(e0[:,(params.base//2):],d1[:,(params.base//2):]))
+        
+        # Reshape output to original dimensions for loss function computation with respect to corresponding mask
+        
+        out = out.view(params.batch_size, out.shape[1], out.shape[2], out.shape[3], out.shape[0]//params.batch_size)
+        
+        return out
+        

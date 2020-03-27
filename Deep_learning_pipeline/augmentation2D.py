@@ -42,39 +42,15 @@ class Augmentations2D:
         images_aug = aug(**data)
 
         img, mask_aux = images_aug["image"], images_aug["mask"]
-        
-        if params.sum_work:
-        
-            mask = mask_aux[:,:,0]
-
-            sum_t = mask_aux[:,:,1:]
-
-            if len(sum_t.shape) != 3:
-
-                sum_t = np.expand_dims(sum_t, axis = -1)
-             
-            if len(img.shape) != 3:
-
-                img = np.expand_dims(img, axis = -1)
-
-            return img, mask, sum_t
-         
-        else:
             
-            if len(img.shape) != 3:
+        if len(img.shape) != 3:
 
-                img = np.expand_dims(img, axis = -1)
-            
-            
-            return img, mask_aux
-            
-            
-        
-        
-    
+            img = np.expand_dims(img, axis = -1)
 
-    
-    
+
+        return img, mask_aux
+            
+
     def __main__(self):
         
         # Define set of transformations
@@ -87,35 +63,16 @@ class Augmentations2D:
                     ],
                     p = params.augm2D_probs[0]
                 )
+            
+        data = {"image": self.img, "mask": self.mask}
+
+        img_final, mask = self.augment_slices(augmentation_pipeline, data)
         
-        if params.sum_work: # Augment an extra channel
-        
-            img_aux = self.img[:,:,:self.img.shape[-1]//2]
-
-            sum_t = self.img[:,:,self.img.shape[-1]//2:]
-
-            mask_new = np.zeros((self.mask.shape[0], self.mask.shape[1], 1 + sum_t.shape[2]))
-
-            mask_new[:,:,0] = self.mask
-
-            mask_new[:,:,1:] = sum_t
-
-            data = {"image": img_aux, "mask": mask_new}
-
-
-            img, mask, sum_t = self.augment_slices(augmentation_pipeline, data)
-
-            img_final = np.zeros(self.img.shape)
-
-            img_final[:,:,:self.img.shape[-1]//2] = img
-
-            img_final[:,:,self.img.shape[-1]//2:] = sum_t
+        if params.three_D or (not(params.three_D) and params.add3d > 0):
             
-        else: # Augment an ordinary 2D set
+            if random.uniform(0,1) < params.augm2D_probs[3]:
             
-            data = {"image": self.img, "mask": self.mask}
-            
-            img_final, mask = self.augment_slices(augmentation_pipeline, data)
+                img_final = np.flip(img_final, axis = -1)
 
         
         return img_final, mask

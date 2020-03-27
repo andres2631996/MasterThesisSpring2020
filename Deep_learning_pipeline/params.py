@@ -38,10 +38,12 @@ flow_folders = [raw_path_ckd2, raw_path_hero, raw_path_extr] # Folders with flow
 
 studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
+rep = True # Repetition of minority studies in data presented to the network
+
 
 # Data selection parameters
 
-prep_step = 'prep' # Level of preprocessing to apply for images to the network
+prep_step = 'crop' # Level of preprocessing to apply for images to the network
 
 train_with = 'magBF' # Type of images to train with
 
@@ -49,7 +51,7 @@ three_D = False # Train with separate 2D slices or 2D + time volumes
 
 add3d = 0 # Number of past and future neighboring slices to build a 2.5D dataset
 
-sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
+sum_work = True # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
 
@@ -60,11 +62,11 @@ augmentation = True
 
 augm_params = [0.15, 10] # Augmentation limit parameters: maximum mean noise amplitude, maximum scale and maximum degree rotation
 
-augm_probs = [1]*5 # Probabilities for each augmentation event
+augm_probs = [0.5]*5 # Probabilities for each augmentation event
 
 # Optional 2D augmentation with albumentations
 
-augm2D_limits = [0.95, 10] # Augmentation limit parameters: contrast, Brightness, Scale, Rotation, Flip, Elastic Deformation
+augm2D_limits = [0.95, 10] # Augmentation limit parameters: Scale, Rotation, Flip
 
 augm2D_probs = [0.5]*5
 
@@ -72,19 +74,23 @@ augm2D_probs = [0.5]*5
 
 k = 4 # Number of cross validation folds
 
-rep = True # Repetition of minority studies in data presented to the network
+
 
 
 
 # Architecture parameters
 
-architecture = 'UNet_with_Residuals' # Architecture type
+rnn = 'GRU' # Type of recurrent architecture to be integrated with U-Net
+
+rnn_position = 'full' # Part of the U-Net with recurrent modules (encoder/decoder/full)
+
+architecture = 'NewUNet_with_Residuals' # Architecture type
+
+#architecture = 'UNetRNN'
 
 normalization = 'instance' # Normalization type to apply in networks (None/batch/instance)
 
 dropout = 0.5 # Dropout rate to apply in networks
-
-layers = 4 # Number of architecture layers
 
 base = 64 # Basic number of features to extract in architecture
 
@@ -92,15 +98,17 @@ kernel_size = 3 # Kernel size for convolutional architecture
 
 padding = 1 # Padding for architecture
 
-if three_D:
+num_layers = 3 # Number of encoder and decoder layers to be used
+
+if three_D or (not(three_D) and add3d > 0):
     
-    network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_3D/'
+    network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_' + rnn + '_3D/'
     
 else:
     
     if sum_work:
 
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dsum/' # Folder where to save data related to Deep Learning architecture
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dextra/' # Folder where to save data related to Deep Learning architecture
 
     else:
         
@@ -154,7 +162,7 @@ step = I/10 # Step for LR scheduling
 
 lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
-num_layers = 3 # Number of encoder and decoder layers to be used
+
 
 
 

@@ -308,7 +308,6 @@ def train(net, loader_train, loader_val = None, k = 0):
         
         for X, Y, name in loader_train:
             
-            
             if i >= params.I:
                 
                 continue
@@ -416,8 +415,6 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                     
                     #results_train = evaluate.evaluate(net, loader_train, i)
-            
-                    
                     
                     results_eval = evaluate.evaluate(net, loader_val, i)
 

@@ -113,7 +113,7 @@ class QFlowDataset(data.Dataset):
     def sumTime(self, path):
 
         """
-        Provide sum of image along time as extra channel for 2D cases
+        Provide sum of image along time as extra channel for 2D cases, and also MIP
         
         Params:
             
@@ -127,11 +127,15 @@ class QFlowDataset(data.Dataset):
 
         frame_ind = path.index('frame')           
         
-        new_path = path[:frame_ind] + 'sum.vtk' # Sum time image path
+        sum_path = path[:frame_ind] + 'sum.vtk' # Sum time image path
         
-        sum_t, _, _ = self.readVTK(new_path)
+        mip_path = path[:frame_ind] + 'mip.vtk' # MIP image path
         
-        return sum_t[:,:,0]
+        sum_t, _, _ = self.readVTK(sum_path)
+        
+        mip,_,_ = self.readVTK(mip_path)
+        
+        return sum_t[:,:,0], mip[:,:,0]
     
     
     
@@ -282,11 +286,11 @@ class QFlowDataset(data.Dataset):
                 
                 if 'both' in params.train_with:
                 
-                    channels = 4 # Magnitude + phase + sum of all magnitudes in time + sum of all phases in time
+                    channels = 7 # Magnitude + phase + sum of all magnitudes in time + sum of all phases in time + MIP phase + MIP magnitude + Magnitude*Phase
                 
                 else:
                     
-                    channels = 2 # Magnitude/phase + sum of all magnitudes/phases in time
+                    channels = 3 # Magnitude/phase + sum of all magnitudes/phases in time + MIP of magnitude/phase along time
 
  
             raw,_,_ = self.readVTK(raw_path)
@@ -323,9 +327,11 @@ class QFlowDataset(data.Dataset):
                     
                     if params.sum_work: # Work with extra channel with sum of time frames
                     
-                        sum_t = self.sumTime(raw_path)
+                        sum_t, mip = self.sumTime(raw_path)
 
                         img[:,:,1] = sum_t
+                        
+                        img[:,:,2] = mip
     
             
             else:
@@ -355,15 +361,21 @@ class QFlowDataset(data.Dataset):
                 
                 else:
     
-                    img[:,:,0] = raw[:,:,0]
-                    
-                    img[:,:,1] = pha_array[:,:,0]
-                
+                    img[:,:,0] = raw
+
                     if params.sum_work: # Work with extra channel with sum of time frames
                     
-                        img[:,:,2] = self.sumTime(raw_path)
+                        img[:,:,1], img[:,:,2] = self.sumTime(raw_path)
+                        
+                        img[:,:,3] = pha_array[:,:,0]
 
-                        img[:,:,3] = self.sumTime(pha_path)
+                        img[:,:,4], img[:,:,5] = self.sumTime(pha_path)
+                        
+                        img[:,:,6] = img[:,:,0]*img[:,:,3]
+                        
+                    else:
+                        
+                        img[:,:,1] = pha_array[:,:,0]
                     
             
             
@@ -373,31 +385,37 @@ class QFlowDataset(data.Dataset):
                 
                 if augm_chance < params.augm_probs[0]:
     
-                    if params.three_D or (not(params.three_D) and params.add3d > 0):
+                    #if params.three_D or (not(params.three_D) and params.add3d > 0):
                         
-                        img = np.expand_dims(img, axis = 0)
+                     #   img = np.expand_dims(img, axis = 0)
                     
-                        mask_array = np.expand_dims(mask_array, axis = 0)
+                      #  mask_array = np.expand_dims(mask_array, axis = 0)
                         
-                        augm = Augmentation(img, mask_array)
+                      #  augm = Augmentation(img, mask_array)
                         
-                        img, mask_array = augm.__main__()
+                      #  img, mask_array = augm.__main__()
                         
-                        if not('both' in params.train_with):
+                       # if not('both' in params.train_with):
                             
-                            img = img[0,:,:,:,:]
+                        #    img = img[0,:,:,:,:]
                             
-                            mask_array = mask_array[0,:,:,:]
+                         #   mask_array = mask_array[0,:,:,:]
 
                         
                     
-                    else:
-                        
+                    #else:
+                    
+                        if params.three_D:
+                            
+                            img = img.reshape((img.shape[0], img.shape[1], img.shape[-2]*img.shape[-1]))
+
                         augm2D = augmentation2D.Augmentations2D(img, mask_array)
-                        
+
                         img, mask_array = augm2D.__main__()
                         
-                
+                        if params.three_D or (not(params.three_D) and params.add3d > 0):
+                            
+                            img = img.reshape((img.shape[0], img.shape[1], img.shape[-1]//channels, channels))
 
         
             X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float()

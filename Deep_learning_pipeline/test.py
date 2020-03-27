@@ -432,13 +432,16 @@ class testing:
         
         """
         Provide torch tensors with data. If the evaluation is in 2D, a list
-        with the sums of the frames along time is outputted, too
+        with the sums of the frames along time and their maximum intensity 
+        projection is outputted, too
         
         """
         
         img_arrays = []
         
         sum_t_list = []
+        
+        mip_list = []
         
         for i in range(len(img_filename)):
             
@@ -454,7 +457,13 @@ class testing:
         
                 sum_t_list.append(np.sum(img_array, axis = -1))
             
+                if 'pha' in img_filename[i]:
             
+                    mip_list.append(np.amax(np.abs(img_array), axis = -1))
+                
+                else:
+                    
+                    mip_list.append(np.amax(np.abs(img_array), axis = -1))
         
         # Adjust to adequate tensor dimensions
         
@@ -494,11 +503,11 @@ class testing:
 
             Y = Variable(torch.from_numpy(np.flip(mask,axis = 0).copy())).long()
             
-            return X, Y, origin, spacing, sum_t_list
+            return X, Y, origin, spacing, sum_t_list, mip_list
         
         else:
             
-            return X, origin, spacing, sum_t_list
+            return X, origin, spacing, sum_t_list, mip_list
         
         
     
@@ -526,7 +535,23 @@ class testing:
             
             print(net)
             
-            utilities.print_num_params(net) 
+            utilities.print_num_params(net)
+            
+        elif params.architecture == "NewUNet_with_Residuals":
+        
+            net = models.NewUNet_with_Residuals().cuda() 
+            
+            print(net)
+            
+            utilities.print_num_params(net)
+            
+        elif params.architecture == "UNetRNN":
+        
+            net = models.UNetRNN().cuda()
+            
+            print(net)
+            
+            utilities.print_num_params(net)
             
             # MORE MODELS TO COME!!!
         
@@ -683,55 +708,16 @@ class testing:
         
         venc = vencs[ind]
         
-        if 'CKD' in img_filename:
+        # Analyze CKD1 and CKD2 studies
         
-            # Analyze CKD1 and CKD2 studies
+        # Set phase from 0 to +1, being scaled by the VENC
             
-            vel_array = phase_array/venc
-            
-            vel_array += 1
-            
-            vel_array = phase_array/2
-        
-        elif study == 'hero' or study == 'Hero':
-            
-            min_pha = np.amin(phase_array)
-            
-            max_pha = np.amax(phase_array)
-            
-            if max_pha - min_pha < 2: # Range probably between 0 and 1
-                
-                vel_array = phase_array
-            
-            else:
-                
-                aux_array = phase_array/(np.amax(phase_array))
-            
-                aux_array += 1
+        vel_array = phase_array/venc
 
-                vel_array = aux_array/2
-        
-        elif study == 'extr' or study == 'Extr':
-            
-            # Analyze extra images
-            
-            if '20190103' in img_filename:
-                
-                aux_array = phase_array/(np.amax(phase_array))
-                
-                aux_array += 1
+        vel_array += 1
 
-                vel_array = aux_array/2
-                
-            
-            else:
-                
-                vel_array = phase_array/venc
-            
-                vel_array += 1
-
-                vel_array = phase_array/2
-            
+        vel_array = phase_array/2
+   
         return vel_array
         
     
@@ -861,23 +847,23 @@ class testing:
                     
                     if len(self.mask_filename) != 0:
                         
-                        if params.three_D:
+                        if params.three_D or (not(params.three_D) and params.add3d > 0):
                         
                             X,Y, origin, spacing, _ = self.extractTensors(self.img_filename[i], self.img_path[i], self.mask_filename[i])
                         
                         else:
                             
-                            X,Y, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[i], self.img_path[i], self.mask_filename[i])
+                            X,Y, origin, spacing, sum_t_list, mip_list = self.extractTensors(self.img_filename[i], self.img_path[i], self.mask_filename[i])
                     
                     else:
                         
-                        if params.three_D:
+                        if params.three_D or (not(params.three_D) and params.add3d > 0):
                         
                             X, origin, spacing, _ = self.extractTensors(self.img_filename[i], self.img_path[i], None)
                         
                         else:
                             
-                            X, origin, spacing, sum_t_list = self.extractTensors(self.img_filename[i], self.img_path[i], None)
+                            X, origin, spacing, sum_t_list, mip_list = self.extractTensors(self.img_filename[i], self.img_path[i], None)
                         
                         Y = None
                     
@@ -894,6 +880,32 @@ class testing:
                             
                             out = torch.argmax(out, 1).cpu() # Inference output
                             
+                        elif not(params.three_D) and (params.add3d > 0):
+                            
+                            # 2D architecture with past and future neighbors
+                            
+                            sets = X.shape[-1]//(2*params.add3d + 1)
+                            
+                            out = torch.zeros(Y.shape)
+                            
+                            cont = 0
+                            
+                            for n in range(sets + 1):
+                                
+                                if n < sets:
+                                
+                                    out_aux = model(X[:,:,:,:,cont:(cont + 2*params.add3d + 1)].cuda(non_blocking=True)).data
+
+                                    out[:,:,:,cont:(cont + 2*params.add3d + 1)] = torch.argmax(out_aux, 1).cpu()
+                                    
+                                    cont += 2*params.add3d + 1
+                                    
+                                else:
+                                    
+                                    out_aux = model(X[:,:,:,:,cont:-1].cuda(non_blocking=True)).data
+
+                                    out[:,:,:,cont:-1] = torch.argmax(out_aux, 1).cpu()
+                            
                         else: # 2D architecture
                             
                             out = torch.zeros(1, X.shape[-3], X.shape[-2], X.shape[-1])
@@ -901,12 +913,35 @@ class testing:
                             for k in range(X.shape[-1]):
 
                                 if len(sum_t_list) > 0:
-                                    
-                                    X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list), X.shape[2], X.shape[3])
-                                
-                                    X_aux[:, :X.shape[1],:,:] = X[:,:,:,:,k]
 
-                                    X_aux[:, X.shape[1]:,:,:] = torch.tensor(np.array(sum_t_list))
+                                    if 'both' in params.train_with:
+                                        
+                                        X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list) + len(mip_list), X.shape[2], X.shape[3])
+                                    
+                                        X_aux[:, :X.shape[1],:,:] = X[:,:,:,:,k]
+
+                                        X_aux[:, X.shape[1],:,:] = torch.tensor(np.array(sum_t_list[0]))
+                                        
+                                        X_aux[:, X.shape[1] + 1,:,:] = torch.tensor(np.array(mip_list[0]))
+                                        
+                                    else:
+                                        
+                                        X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list) + len(mip_list) + 1, X.shape[2], X.shape[3])
+                                        
+                                        X_aux[:, 0, :, :] = X[:,0,:,:,k]
+                                        
+                                        X_aux[:, 3, :, :] = X[:,1,:,:,k]
+                                        
+                                        X_aux[:, 1, :, :] = torch.tensor(np.array(sum_t_list[0]))
+                                        
+                                        X_aux[:, 2, :, :] = torch.tensor(np.array(mip_list[0]))
+                                        
+                                        X_aux[:, 4, :, :] = torch.tensor(np.array(sum_t_list[1]))
+                                        
+                                        X_aux[:, 5, :, :] = torch.tensor(np.array(mip_list[1]))
+                                        
+                                        X_aux[:, 6, :, :] = torch.mul(X[:,0,:,:,k], X[:,1,:,:,k])
+                                        
 
                                     out_aux = model(X_aux.cuda(non_blocking=True)).data
                                 
@@ -996,8 +1031,14 @@ class testing:
                             pha_array, origin, spacing = self.readVTK(self.img_path[i], pha_filename)
 
                         # Obtain array with velocities (cm/s)
+        
+                        if len(self.mask_filename) == 0:
+                
+                            vel_array = pha_array
+                    
+                        else:
 
-                        vel_array = self.phase2velocity(pha_array, self.img_filename[i][0])
+                            vel_array = self.phase2velocity(pha_array, self.img_filename[i][0])
 
                         flow_out = self.flowFromMask(out.numpy(), vel_array, spacing)
 
@@ -1008,21 +1049,22 @@ class testing:
                         study = self.img_filename[i][0][:4]
                         
                         if study == 'CKD1':
-                            
-                            
+
                             ref_flow, ref_max_v, ref_min_v = self.excelInfo(self.img_filename[i][0])
                             
                             # Remove possible nans from empty segmentation results
                             
                             result_flows_aux = result_flows[-1][-3][np.logical_not(np.isnan(result_flows[-1][-3]))]
                             
-                            result_v_aux = result_flows[-1][0][np.logical_not(np.isnan(result_flows[-1][0]))]
+                            result_min_aux = np.abs(result_flows[-1][3][np.logical_not(np.isnan(result_flows[-1][3]))])
+                            
+                            result_max_aux = np.abs(result_flows[-1][2][np.logical_not(np.isnan(result_flows[-1][2]))])
                             
                             result_flow = np.mean(result_flows_aux)
                             
-                            result_v_max = np.nanmax(result_v_aux)
+                            result_v_max = np.nanmax(np.amax(result_max_aux.flatten()))
                             
-                            result_v_min = np.nanmin(result_v_aux)
+                            result_v_min = np.nanmin(np.amin(result_min_aux.flatten()))
                             
                             if result_flow < 0:
                                 

@@ -98,6 +98,14 @@ class Augmentation:
             
             angle = 0
         
+        #if r_rot < params.augm_probs[1]:
+            
+         #   transpose = 1
+            
+        #else:
+            
+         #   transpose = 0
+        
         
         # Flipping randomization
         
@@ -159,7 +167,7 @@ class Augmentation:
         
         inp[:,:,:,:,-1] = self.seg
         
-        trans = np.zeros(inp.shape)
+        trans = np.copy(inp)
         
 
         # Affine transformation parameters
@@ -189,6 +197,10 @@ class Augmentation:
                         inp[k,:,:,i,j],transform.T,order = 0, offset = offset, 
                         output_shape=(self.img.shape[1],self.img.shape[2]),
                         cval=0.0,output=np.float32)
+            
+        #if out_params[0] > 0: # 90 degree rotation
+            
+         #   trans = np.transpose(trans, axes = (0,2,1,3,4))
     
                     
         if out_params[-2] > 0: # Flipping
