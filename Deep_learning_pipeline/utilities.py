@@ -25,6 +25,10 @@ import matplotlib.pyplot as plt
 
 from torch.autograd import Variable
 
+import cc3d
+
+from skimage import measure
+
 
 def dice_loss(output, target, weights = params.loss_weights):
     
@@ -169,6 +173,124 @@ def exp_log_loss(output, target):
     return weighted_dice + weighted_bce
 
 
+def connectedComponents(x):
+    
+    """
+    Extract the number of connected components of a tensor.
+
+    
+    Params:
+    
+        - x: input tensor
+        
+    Returns:
+    
+        - out: number of connected components
+    
+    """ 
+
+    # Transform tensor into Numpy array
+
+    x_array = x.detach().cpu().numpy() # B,C,H,W (T)
+
+    # Get labels from connected components for all elements in batch
+    
+    out = [] # Batch list with results
+
+    if len(x_array.shape) == 3: # 2D arrays
+
+        for i in range(x_array.shape[0]):
+
+            labels = measure.label(x_array[i,:,:], background = 0)
+            
+            unique_labels = np.unique(labels.flatten())
+            
+            num_labels = len(unique_labels)
+            
+            out.append(num_labels)
+            
+            #probs = []
+
+            #for label in unique_labels:
+
+             #   ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+
+                # Extract the mean value of each connected component
+                
+              #  probs.append(np.mean(x_array[i,0,ind_label[0],ind_label[1]].flatten()))
+                
+            #prob_sorted = sorted(probs)
+            
+            #if len(probs) > 1:
+                
+             #   ind_max = probs.index(prob_sorted[-2]) # Index of connected component with the highest probability of being vessel
+
+              #  label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
+
+               # ind_max = np.array(np.where(labels == label_max)) # Spatial coordinates of connected component with the highest probability
+
+               # out[i, ind_max[0], ind_max[1]] = 1
+                
+                
+
+    elif len(x_array.shape) == 4: # 3D arrays
+
+        for i in range(x_array.shape[0]):
+
+            labels = cc3d.connected_components(x_array[i,:,:,:].astype(int)) # 26-connected
+            
+            unique_labels = np.unique(labels.flatten())
+            
+            num_labels = len(unique_labels)
+            
+            out.append(num_labels)
+            
+            #probs = []
+
+            #for label in unique_labels:
+
+             #   ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+
+                # Extract the mean value of each connected component
+                
+              #  probs.append(np.mean(x_array[i,1,ind_label[0],ind_label[1], ind_label[2]].flatten()))
+                
+            #if len(probs) > 1:
+                
+             #   prob_sorted = sorted(probs)
+
+              #  ind_max = probs.index(prob_sorted[-2]) # Index of connected component with the highest probability of being vessel
+
+               # label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
+
+                #ind_max = np.array(np.where(labels == label_max)) # Spatial coordinates of connected component with the highest probability
+
+                #out[i, ind_max[0], ind_max[1], ind_max[2]] = 1
+            
+    return out
+
+
+def connectedComponentLoss(output, target, weight = 1):
+
+    """
+    Compute a loss based on the connected components of the network output and the target
+
+    Params:
+
+        - output: network output (torch.tensor)
+
+        - target: mask (torch.tensor)
+
+    """
+
+    cc_output = connectedComponents(output)
+    
+    cc_target = connectedComponents(target)
+    
+    return weight*(np.sum(np.array(cc_output) - np.array(cc_target)))**2
+
+
+
 
 def focal_loss(output, target, weights=None, size_average=True, gamma= 1/params.loss_gamma, eps = 10**-6):
     
@@ -214,6 +336,36 @@ def focal_loss(output, target, weights=None, size_average=True, gamma= 1/params.
     loss = F.nll_loss(output_conf, target, weights)
     
     return loss
+
+
+def focal_cc_loss(output, target, weight = 0.1):
+    
+    """
+    Combination of focal Dice overlap loss with Connected Components Loss
+    
+    Params:
+    
+        - output: result from the network
+        
+        - target: ground truth result
+        
+        - weight: weight for the Connected Components Loss
+        
+    Returns:
+        
+        - Combined Focal + Connected Component loss
+    
+    
+    """
+    
+    focal = focal_loss(output, target)
+    
+    cc = connectedComponentLoss(output, target, 0.1)
+    
+    return focal + cc
+
+
+
 
 
 def tversky_loss_scalar(output, target):
@@ -550,3 +702,101 @@ def loadMetricsResults(path, file):
     else:
         
         print('Introduced file is not TXT. Please introduce a TXT file')
+        
+
+        
+        
+def connectedComponentsPostProcessing(x):
+    
+    """
+    Extract the number of connected components of a tensor.
+
+    
+    Params:
+    
+        - x: input tensor
+        
+    Returns:
+    
+        - out: number of connected components
+    
+    """ 
+
+    # Transform tensor into Numpy array
+
+    x_array = x.cpu().numpy() # B,C,H,W (T)
+    
+    binary_array = torch.argmax(x, 1).cpu().numpy() # Inference output
+
+    # Get labels from connected components for all elements in batch
+    
+    out = torch.zeros(binary_array.shape)
+
+    if len(x_array.shape) == 4: # 2D arrays
+
+        for i in range(x_array.shape[0]):
+
+            labels = measure.label(x_array[i,:,:], background = 0)
+            
+            unique_labels = np.unique(labels.flatten())
+            
+            num_labels = len(unique_labels)
+            
+            probs = []
+
+            for label in unique_labels:
+
+                ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+
+                # Extract the mean value of each connected component
+                
+                probs.append(np.mean(x_array[i,0,ind_label[0],ind_label[1]].flatten()))
+                
+            prob_sorted = sorted(probs)
+            
+            if len(probs) > 1:
+                
+                ind_max = probs.index(prob_sorted[-2]) # Index of connected component with the highest probability of being vessel
+
+                label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
+
+                ind_max = np.array(np.where(labels == label_max)) # Spatial coordinates of connected component with the highest probability
+
+                out[i, ind_max[0], ind_max[1]] = 1
+                
+                
+
+    elif len(x_array.shape) == 5: # 3D arrays
+
+        for i in range(x_array.shape[0]):
+
+            labels = cc3d.connected_components(binary_array[i,:,:,:].astype(int)) # 26-connected
+            
+            unique_labels = np.unique(labels.flatten())
+            
+            num_labels = len(unique_labels)
+            
+            probs = []
+
+            for label in unique_labels:
+
+                ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+
+                # Extract the mean value of each connected component
+                
+                probs.append(np.mean(x_array[i,1,ind_label[0],ind_label[1], ind_label[2]].flatten()))
+
+                
+            if len(probs) > 1:
+                
+                prob_sorted = sorted(probs)
+
+                ind_max = probs.index(prob_sorted[-2]) # Index of connected component with the highest probability of being vessel
+
+                label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
+
+                ind_max = np.array(np.where(labels == label_max)) # Spatial coordinates of connected component with the highest probability
+
+                out[i, ind_max[0], ind_max[1], ind_max[2]] = 1
+            
+    return out

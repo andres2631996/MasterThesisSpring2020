@@ -166,6 +166,12 @@ def lossSelection(output, Y):
         loss = utilities.focal_tversky_loss(output, Y.cuda(non_blocking=True))
         
         found = 1
+        
+    elif params.loss_fun == 'focal_cc':
+        
+        loss = utilities.focal_cc_loss(output, Y.cuda(non_blocking=True), 0.1)
+        
+        found = 1
     
     else:
         
@@ -372,6 +378,7 @@ def train(net, loader_train, loader_val = None, k = 0):
                 if params.lr_scheduling:
                     
                     scheduler.step()
+
                     
                 # Loss printing
                 

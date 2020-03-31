@@ -20,6 +20,10 @@ import numpy as np
 
 from convRNNs import ConvLSTM, ConvGRU
 
+import cc3d
+
+from skimage import measure
+
 
 class Concat(nn.Module):
     
@@ -424,6 +428,7 @@ class UNet_with_Residuals(nn.Module):
 
         return out
     
+    
 class UNet_with_ResidualsFourLayers(nn.Module):
     
     """
@@ -517,7 +522,7 @@ class UNet_with_ResidualsFourLayers(nn.Module):
 
 
         #d3 = self.Ru3(e4)
-        d2 = self.Ru1(e3)
+        d2 = self.Ru2(e3)
         
         if d2.shape[2] != e2.shape[2]:
             
@@ -543,7 +548,54 @@ class UNet_with_ResidualsFourLayers(nn.Module):
         return out
     
     
+class connectedComponents(nn.Module):
     
+    """
+    Extract the number of connected components of the result from a neural network.
+    
+    Take the connected component with the largest probability to be renal artery and
+    
+    leave just that connected component.
+    
+    Params:
+    
+        - x: tensor result from neural network (B, C, H, W) or (B, C, H, W, T)
+        
+    Returns:
+    
+        - out: tensor result with just one connected component
+    
+    """ 
+    
+    def __init__(self):
+        
+        super(connectedComponents, self).__init__()
+        
+    def forward(self,x):
+        
+        # Compute output tensor from probability classes
+        
+        binary = torch.argmax(x, 1)
+        
+        # Transform tensor into Numpy array
+        
+        binary_array = binary.detach().numpy() # B,H,W (T)
+        
+        x_array = x.detach().numpy() # B,C,H,W (T)
+        
+        # Get labels from connected components for all elements in batch
+        
+        if len(binary_array.shape) == 3: # 2D arrays
+            
+            for i in range(binary_array.shape[0]):
+            
+                labels = measure.label(binary_array[i,:,:], background=0)
+        
+        elif len(x_array.shape) == 4: # 3D arrays
+
+            for i in range(binary_array.shape[0]):
+            
+                labels = cc3d.connected_components(binary_array[i,:,:]) # 26-connected
     
 class NewUNet_with_Residuals(nn.Module):
     
@@ -649,9 +701,405 @@ class NewUNet_with_Residuals(nn.Module):
         out = self.Rf(self.cat(e0[:,params.base//2:],d0[:,params.base//2:]))
 
 
-        return out    
-
+        return out 
     
+    
+    
+class conv_res_block(nn.Module):
+    
+    """
+    Convolutional block with residuals for Attention U-Net.
+    
+    Can optionally be used with recurrent units, too
+    
+    Params:
+    
+    - Init: ch_in: number of input channels // ch_out: number of output channels // key: flag stating if the block is in the encoder or in the decoder
+    
+    - Forward: x: input tensor
+    
+    Outputs: x: output tensor
+    
+    
+    """
+    
+    def __init__(self,ch_in,ch_out, key):
+        
+        super(conv_res_block,self).__init__()
+        
+        if params.rnn == None:
+        
+            self.conv1 = nn.Conv2d(ch_in, ch_out, kernel_size=params.kernel_size,stride=1,padding=params.padding,bias=True)
+            
+        else:
+            
+            if params.rnn_position == 'full' or params.rnn_position == key:
+            
+                if params.rnn == 'LSTM':
+
+                    self.conv1 = ConvLSTM(ch_in, ch_out, (params.kernel_size, params.kernel_size), 1, True, True, False)
+
+                elif params.rnn == 'GRU':
+
+                    if torch.cuda.is_available():
+
+                        dtype = torch.cuda.FloatTensor # computation in GPU
+
+                    else:
+
+                        dtype = torch.FloatTensor
+
+                    self.conv1 = ConvGRU(ch_in, ch_out, (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
+              
+            else:
+                
+                self.conv1 = nn.Conv2d(ch_in, ch_out, kernel_size=params.kernel_size, stride=1, padding=params.padding, bias=True)
+        
+        self.bn1 = EncoderNorm_2d(ch_out)
+        
+        self.relu1 = nn.ReLU(inplace=True)
+        
+        self.conv2 = nn.Conv2d(ch_out, ch_out, kernel_size=params.kernel_size,stride=1,padding=params.padding,bias=True)
+        
+        self.bn2 = EncoderNorm_2d(ch_out)
+
+        self.relu2 = nn.ReLU(inplace=True)
+        
+        self.Conv_1x1 = nn.Conv2d(ch_in,ch_out,kernel_size=params.kernel_size,stride=1,padding=1)
+
+
+    def forward(self,x):
+        
+        x0 = self.Conv_1x1(x)
+        
+        if params.rnn is not None:
+            
+            x = x.view(params.batch_size, x.shape[0]//params.batch_size, x.shape[-3], x.shape[-2], x.shape[-1])
+        
+            x,_ = list(self.conv1(x))
+        
+            x = x[0].view(x[0].shape[0]*x[0].shape[1],x[0].shape[-3], x[0].shape[-2], x[0].shape[-1])
+            
+            x1 = self.relu1(self.bn1(x))
+            
+        else:
+        
+            x1 = self.relu1(self.bn1(self.conv1(x)))
+        
+        x2 = self.relu2(self.bn2(self.conv2(x1)))
+        
+        return x0 + x2
+    
+    
+class up_conv(nn.Module):
+    
+    """
+    Perform upsampling in decoder section of U-Net
+    
+    Params:
+    
+        - init: ch_in: input number of channels // ch_out: output number of channels
+    
+        - forward: x: input tensor
+        
+    """
+    
+    
+    def __init__(self,ch_in,ch_out):
+        
+        super(up_conv,self).__init__()
+        
+        self.up = nn.ConvTranspose2d(ch_in, ch_in, params.kernel_size, stride = 2,padding=params.padding)
+        
+        self.bn1 = EncoderNorm_2d(ch_in)
+
+        self.relu1 = nn.ReLU(inplace=True)
+        
+        self.conv = nn.Conv2d(ch_in,ch_out,kernel_size=params.kernel_size,stride=1,padding=params.padding,bias=True)
+        
+        self.bn2 = EncoderNorm_2d(ch_out)
+
+        self.relu2 = nn.ReLU(inplace=True)
+        
+
+    def forward(self,x):
+        
+        x1 = self.relu1(self.bn1(self.up(x)))
+        
+        x2 = self.relu2(self.bn2(self.conv(x1)))
+
+        
+        return x2
+    
+    
+       
+    
+class Attention_block(nn.Module):
+    
+    def __init__(self,F_g,F_l,F_int):
+        
+        super(Attention_block,self).__init__()
+        
+        self.W_g = nn.Conv2d(F_g, F_int, kernel_size=1,stride=1,padding=0,bias=True)
+        
+        self.bn1 = EncoderNorm_2d(F_int)
+            
+        
+        self.W_x = nn.Conv2d(F_l, F_int, kernel_size=1,stride=1,padding=0,bias=True)
+            
+        self.bn2 = EncoderNorm_2d(F_int)
+        
+        
+
+        self.psi = nn.Conv2d(F_int, 1, kernel_size=1,stride=1,padding=0,bias=True)
+        
+        self.bn3 = EncoderNorm_2d(1)
+        
+        self.sigma = nn.Sigmoid()
+        
+        self.relu = nn.ReLU(inplace=True)
+        
+        
+        
+    def forward(self,g,x):
+        
+        g1 = self.bn1(self.W_g(g))
+        
+        x1 = self.bn2(self.W_x(x))
+        
+        psi = self.relu(g1+x1)
+        
+        psi = self.sigma(self.bn3(self.psi(psi)))
+
+        return x*psi 
+    
+    
+    
+
+class AttentionUNet(nn.Module):
+    
+    """
+    U-Net with residuals architecture, extracted from Bratt et al., 2019 paper, including Attention Gates, from Oktay et al., 2018 paper
+    
+    Processes 2D data
+    
+    """
+
+    def __init__(self):
+        
+        super(AttentionUNet, self).__init__()
+
+        self.cat = Concat()
+        
+        self.pad = addRowCol()
+        
+        self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
+        
+        # Decide on number of input channels
+        
+        if params.three_D or (not(params.three_D) and params.add3d > 0):
+        
+            if 'both' in params.train_with:
+
+                in_chan = 2
+
+            else:
+
+                in_chan = 1
+                
+        else:
+        
+            if params.sum_work and 'both' in params.train_with:
+
+                in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
+
+            elif (params.sum_work and not('both' in params.train_with)):
+
+                in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+
+            elif (not(params.sum_work) and 'both' in params.train_with):
+
+                in_chan = 2 # Train with magnitude + phase (no sum)
+
+            elif not(params.sum_work) and not('both' in params.train_with):
+
+                in_chan = 1 # Train magnitude or phase (no sum)
+            
+        # Encoder
+
+        self.Down1 = conv_res_block(ch_in=in_chan, ch_out=params.base*(2**(params.num_layers - 3)), key = 'encoder')
+        
+        self.Down2 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 3)),ch_out=params.base*(2**(params.num_layers - 2)), key = 'encoder')
+    
+        self.Down3 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 2)),ch_out=params.base*(2**(params.num_layers - 1)), key = 'encoder')
+   
+        
+        # Decoder + Attention Gates                                           
+                                                   
+        self.Up3 = up_conv(ch_in=params.base*(2**(params.num_layers - 1)),ch_out=params.base*(2**(params.num_layers - 2)))
+                                                   
+        self.Att3 = Attention_block(F_g=params.base*(2**(params.num_layers - 2)),F_l=params.base*(2**(params.num_layers - 2)),F_int=params.base*(2**(params.num_layers - 3)))
+                                                   
+        self.Up_conv3 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 1)), ch_out=params.base*(2**(params.num_layers - 2)), key = 'decoder')
+        
+        self.Up2 = up_conv(ch_in=params.base*(2**(params.num_layers - 2)),ch_out=params.base*(2**(params.num_layers - 3)))
+            
+        self.Att2 = Attention_block(F_g=params.base*(2**(params.num_layers - 3)),F_l=params.base*(2**(params.num_layers - 3)),F_int=int(params.base*(2**(params.num_layers - 4))))
+                                                   
+        self.Up_conv2 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 2)), ch_out=params.base*(2**(params.num_layers - 3)), key = 'decoder')
+
+        self.Conv_1x1 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1,  stride=1,padding=0)
+                           
+     
+                           
+    def forward(self,x):
+                           
+        if params.three_D or (not(params.three_D) and params.add3d > 0):
+                           
+            # Reshape input: (B, C, H, W, T) --> (B*T, C, H, W)
+
+            x = x.view(x.shape[0]*x.shape[-1], x.shape[1], x.shape[-3], x.shape[-2])
+                           
+        # encoding path
+                           
+        x1 = self.Down1(x)
+
+        x2 = self.Maxpool(x1)
+        x2 = self.Down2(x2)
+        
+        x3 = self.Maxpool(x2)
+        x3 = self.Down3(x3)
+        
+        
+        d3 = self.Up3(x3)
+        
+        if d3.shape[2] != x2.shape[2]:
+            
+            d3 = self.pad(d3)
+        
+        x2 = self.Att3(g=d3,x=x2)
+        d3 = self.Up_conv3(self.cat(x2,d3))
+
+        d2 = self.Up2(d3)
+        
+        if d2.shape[2] != x1.shape[2]:
+            
+            d2 = self.pad(d2)
+        
+        x1 = self.Att2(g=d2,x=x1)
+        d2 = self.Up_conv2(self.cat(x1,d2))
+
+        d1 = self.Conv_1x1(d2)
+        
+        if params.three_D or (not(params.three_D) and params.add3d > 0):
+            
+            d1 = d1.view(params.batch_size, d1.shape[1], d1.shape[2], d1.shape[3], d1.shape[0]//params.batch_size)
+
+        return d1 
+                           
+                           
+class NewAttentionUNet(nn.Module):
+    
+    """
+    U-Net with residuals architecture, extracted from Bratt et al., 2019 paper, including Attention Gates, from Oktay et al., 2018 paper. Does not include subsamplings nor upsamplings
+    
+    Processes 2D data
+    
+    """
+
+    def __init__(self):
+        
+        super(NewAttentionUNet, self).__init__()
+
+        self.cat = Concat()
+        
+        self.pad = addRowCol()
+        
+        # Decide on number of input channels
+        
+        if params.three_D or (not(params.three_D) and params.add3d > 0):
+        
+            if 'both' in params.train_with:
+
+                in_chan = 2
+
+            else:
+
+                in_chan = 1
+                
+        else:
+        
+            if params.sum_work and 'both' in params.train_with:
+
+                in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
+
+            elif (params.sum_work and not('both' in params.train_with)):
+
+                in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+
+            elif (not(params.sum_work) and 'both' in params.train_with):
+
+                in_chan = 2 # Train with magnitude + phase (no sum)
+
+            elif not(params.sum_work) and not('both' in params.train_with):
+
+                in_chan = 1 # Train magnitude or phase (no sum)
+            
+        # Encoder
+
+        self.Down1 = conv_res_block(ch_in=in_chan, ch_out=params.base*(2**(params.num_layers - 3)), key = 'encoder')
+        
+        self.Down2 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 3)),ch_out=params.base*(2**(params.num_layers - 2)), key = 'encoder')
+    
+        self.Down3 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 2)),ch_out=params.base*(2**(params.num_layers - 1)), key = 'encoder')
+   
+        
+        # Decoder + Attention Gates                                           
+                                                   
+        self.Att3 = Attention_block(F_g=params.base*(2**(params.num_layers - 2)),F_l=params.base*(2**(params.num_layers - 2)),F_int=params.base*(2**(params.num_layers - 3)))
+                                                   
+        self.Up_conv3 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 1)), ch_out=params.base*(2**(params.num_layers - 2)), key = 'decoder')
+            
+        self.Att2 = Attention_block(F_g=params.base*(2**(params.num_layers - 3)),F_l=params.base*(2**(params.num_layers - 3)),F_int=int(params.base*(2**(params.num_layers - 4))))
+                                                   
+        self.Up_conv2 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 2)), ch_out=params.base*(2**(params.num_layers - 3)), key = 'decoder')
+
+        self.Conv_1x1 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+                           
+     
+                           
+    def forward(self,x):
+                           
+        if params.three_D or (not(params.three_D) and params.add3d > 0):
+                           
+            # Reshape input: (B, C, H, W, T) --> (B*T, C, H, W)
+
+            x = x.view(x.shape[0]*x.shape[-1], x.shape[1], x.shape[-3], x.shape[-2])
+                           
+        # encoding path
+                           
+        x1 = self.Down1(x)
+
+        x2 = self.Down2(x1)
+        
+        x3 = self.Down3(x2)
+        
+        d3 = self.Up_conv3(x3)
+        
+        x2 = self.Att3(g=d3,x=x2)
+        
+        d2 = self.Up_conv2(self.cat(x2[:,(params.base*(2**(params.num_layers - 3))):],d3[:,(params.base*(2**(params.num_layers - 3))):]))
+        
+        x1 = self.Att2(g=d2,x=x1)
+
+        d1 = self.Conv_1x1(self.cat(x1[:,(int(params.base*(2**(params.num_layers - 4)))):],d2[:,(int(params.base*(2**(params.num_layers - 4)))):]))
+        
+        if params.three_D or (not(params.three_D) and params.add3d > 0):
+            
+            d1 = d1.view(params.batch_size, d1.shape[1], d1.shape[2], d1.shape[3], d1.shape[0]//params.batch_size)
+
+        return d1                            
+
 
 class pretrainedEncoder(nn.Module):
     

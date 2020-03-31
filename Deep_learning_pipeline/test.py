@@ -40,6 +40,10 @@ from evaluate import Dice, Precision, Recall
 
 import cv2
 
+import cc3d
+
+from skimage import measure
+
 
 
 class testing:
@@ -553,6 +557,30 @@ class testing:
             
             utilities.print_num_params(net)
             
+        elif params.architecture == "UNet_with_ResidualsFourLayers":
+        
+            net = models.UNet_with_ResidualsFourLayers().cuda()
+            
+            print(net)
+            
+            utilities.print_num_params(net)
+            
+        elif params.architecture == "AttentionUNet":
+        
+            net = models.AttentionUNet().cuda()
+            
+            print(net)
+            
+            utilities.print_num_params(net)
+            
+        elif params.architecture == "NewAttentionUNet":
+        
+            net = models.NewAttentionUNet().cuda()
+            
+            print(net)
+            
+            utilities.print_num_params(net)
+            
             # MORE MODELS TO COME!!!
         
         else:
@@ -703,7 +731,7 @@ class testing:
         
         
         name = name.replace('.vtk','')
-        
+
         ind = np.where(names == name)
         
         venc = vencs[ind]
@@ -878,7 +906,9 @@ class testing:
                             
                             out = model(X.cuda(non_blocking=True)).data
                             
-                            out = torch.argmax(out, 1).cpu() # Inference output
+                            out = utilities.connectedComponentsPostProcessing(out)
+                            
+                            #out = torch.argmax(out, 1).cpu() # Inference output
                             
                         elif not(params.three_D) and (params.add3d > 0):
                             
@@ -896,25 +926,28 @@ class testing:
                                 
                                     out_aux = model(X[:,:,:,:,cont:(cont + 2*params.add3d + 1)].cuda(non_blocking=True)).data
 
-                                    out[:,:,:,cont:(cont + 2*params.add3d + 1)] = torch.argmax(out_aux, 1).cpu()
+                                    out[:,:,:,cont:(cont + 2*params.add3d + 1)] = utilities.connectedComponentsPostProcessing(out_aux)
+                                    #out[:,:,:,cont:(cont + 2*params.add3d + 1)] = torch.argmax(out_aux, 1).cpu()
                                     
                                     cont += 2*params.add3d + 1
                                     
                                 else:
                                     
                                     out_aux = model(X[:,:,:,:,cont:-1].cuda(non_blocking=True)).data
+                                    
+                                    out[:,:,:,cont:-1] = utilities.connectedComponentsPostProcessing(out_aux)
 
-                                    out[:,:,:,cont:-1] = torch.argmax(out_aux, 1).cpu()
+                                    #out[:,:,:,cont:-1] = torch.argmax(out_aux, 1).cpu()
                             
                         else: # 2D architecture
                             
-                            out = torch.zeros(1, X.shape[-3], X.shape[-2], X.shape[-1])
+                            out = torch.zeros(1, 2, X.shape[-3], X.shape[-2], X.shape[-1])
                             
                             for k in range(X.shape[-1]):
 
                                 if len(sum_t_list) > 0:
 
-                                    if 'both' in params.train_with:
+                                    if not('both' in params.train_with):
                                         
                                         X_aux = torch.zeros(X.shape[0], X.shape[1] + len(sum_t_list) + len(mip_list), X.shape[2], X.shape[3])
                                     
@@ -948,22 +981,26 @@ class testing:
                                 else:
                                     
                                     out_aux = model(X[:,:,:,:,k].cuda(non_blocking=True)).data
-    
-                                out[:,:,:,k] = torch.argmax(out_aux, 1).cpu() # Inference output
+                                    
+                                
+                                out[:,:,:,:,k] = out_aux
+                                #out[:,:,:,k] = torch.argmax(out_aux, 1).cpu() # Inference output
+                             
+                            out = utilities.connectedComponentsPostProcessing(out)
                         
-#                        plt.figure(figsize = (13,5))
+                        plt.figure(figsize = (13,5))
 #                        
-#                        plt.subplot(131)
+                        plt.subplot(121)
 #                        
-#                        plt.imshow(X_aux[0,0,130:158,130:158], cmap = 'gray')
+                        plt.imshow(X[0,0,:,:,25], cmap = 'gray')
 #                        
-#                        plt.subplot(132)
+                        plt.subplot(122)
 #                        
-#                        plt.imshow(out[0,130:158,130:158,-1], cmap = 'gray')
+                        plt.imshow(out[0,:,:,25], cmap = 'gray')
 #                        
-#                        plt.subplot(133)
+                        #plt.subplot(133)
 #                        
-#                        plt.imshow(Y[0,130:158,130:158,-1], cmap = 'gray')
+                        #plt.imshow(Y[0,:,:,25], cmap = 'gray')
                         
                         if len(self.mask_filename) != 0:
                             
@@ -1209,9 +1246,9 @@ class testing:
                             
                             fig = plt.figure(figsize = (13,5))
                             
-                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), np.abs(mean_v/np.max(np.abs(mean_v))), 'b', label = 'Ground truth')
+                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), np.abs(mean_v)/np.max(np.abs(mean_v)), 'b', label = 'Ground truth')
                             
-                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), np.abs(result_flows[-1][0]/np.max(np.abs(result_flows[-1][0]))), 'r', label = 'Result')
+                            plt.plot(np.arange(1,vel_array.shape[-1] + 1), np.abs(result_flows[-1][0])/np.max(np.abs(result_flows[-1][0])), 'r', label = 'Result')
                             
                             plt.title('Normalized flow comparison')
                             

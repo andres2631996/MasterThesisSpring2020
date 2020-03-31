@@ -638,6 +638,18 @@ for k in range(K):
         
         net = models.UNetRNN().cuda()
         
+    elif params.architecture == "UNet_with_ResidualsFourLayers":
+        
+            net = models.UNet_with_ResidualsFourLayers().cuda()
+            
+    elif params.architecture == "AttentionUNet":
+        
+            net = models.AttentionUNet().cuda()
+            
+    elif params.architecture == "NewAttentionUNet":
+        
+            net = models.NewAttentionUNet().cuda()
+        
         # MORE MODELS TO COME!!!        
         #    elif params.arch_type == "VGG11":
         #        net = UNet11(channel_count=no_channels, pre_trained=True).cuda()

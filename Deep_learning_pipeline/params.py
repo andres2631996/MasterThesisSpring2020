@@ -34,24 +34,24 @@ studye = 'Extr'
 
 
 
-flow_folders = [raw_path_ckd2, raw_path_hero, raw_path_extr] # Folders with flow information for patient stratification
+flow_folders = [raw_path_ckd2, raw_path_extr] # Folders with flow information for patient stratification
 
-studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
+studies_flow = ['CKD2', 'Extr'] # Studies with flow information
 
-rep = True # Repetition of minority studies in data presented to the network
+rep = False # Repetition of minority studies in data presented to the network
 
 
 # Data selection parameters
 
 prep_step = 'crop' # Level of preprocessing to apply for images to the network
 
-train_with = 'magBF' # Type of images to train with
+train_with = 'pha' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
 add3d = 0 # Number of past and future neighboring slices to build a 2.5D dataset
 
-sum_work = True # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
+sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
 
@@ -80,7 +80,7 @@ k = 4 # Number of cross validation folds
 
 # Architecture parameters
 
-rnn = 'GRU' # Type of recurrent architecture to be integrated with U-Net
+rnn = None # Type of recurrent architecture to be integrated with U-Net
 
 rnn_position = 'full' # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
@@ -108,11 +108,11 @@ else:
     
     if sum_work:
 
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dextra/' # Folder where to save data related to Deep Learning architecture
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2DextraNoHeroic/' # Folder where to save data related to Deep Learning architecture # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
 
     else:
         
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/'
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2DNoHeroic/' # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
         
         
 # Training parameters
@@ -168,7 +168,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, tversky, focal_tversky, exp_log, bce or bce_dice loss
+loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, tversky, focal_tversky, exp_log, bce or bce_dice loss
 
 loss_beta = 0.3
 
