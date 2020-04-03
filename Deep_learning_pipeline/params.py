@@ -34,18 +34,18 @@ studye = 'Extr'
 
 
 
-flow_folders = [raw_path_ckd2, raw_path_extr] # Folders with flow information for patient stratification
+flow_folders = [raw_path_ckd2, raw_path_hero, raw_path_extr] # Folders with flow information for patient stratification
 
-studies_flow = ['CKD2', 'Extr'] # Studies with flow information
+studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
-rep = False # Repetition of minority studies in data presented to the network
+rep = True # Repetition of minority studies in data presented to the network
 
 
 # Data selection parameters
 
 prep_step = 'crop' # Level of preprocessing to apply for images to the network
 
-train_with = 'pha' # Type of images to train with
+train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
@@ -84,7 +84,7 @@ rnn = None # Type of recurrent architecture to be integrated with U-Net
 
 rnn_position = 'full' # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'NewUNet_with_Residuals' # Architecture type
+architecture = 'AttentionUNet' # Architecture type
 
 #architecture = 'UNetRNN'
 
@@ -100,6 +100,8 @@ padding = 1 # Padding for architecture
 
 num_layers = 3 # Number of encoder and decoder layers to be used
 
+distance_layer = False # If True, use a layer with that computes distance maps as extra features at the end of the encoder 
+
 if three_D or (not(three_D) and add3d > 0):
     
     network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_' + rnn + '_3D/'
@@ -108,11 +110,11 @@ else:
     
     if sum_work:
 
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2DextraNoHeroic/' # Folder where to save data related to Deep Learning architecture # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dextra/' # Folder where to save data related to Deep Learning architecture # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
 
     else:
         
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2DNoHeroic/' # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/' # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
         
         
 # Training parameters
@@ -168,7 +170,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, tversky, focal_tversky, exp_log, bce or bce_dice loss
+loss_fun = 'focal_distance' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, tversky, focal_tversky, exp_log, bce or bce_dice loss
 
 loss_beta = 0.3
 

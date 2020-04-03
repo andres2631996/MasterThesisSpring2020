@@ -29,6 +29,17 @@ import cc3d
 
 from skimage import measure
 
+from ripser import ripser
+
+from persim import plot_diagrams
+
+import scipy
+
+import math
+
+import warnings
+
+
 
 def dice_loss(output, target, weights = params.loss_weights):
     
@@ -772,7 +783,11 @@ def connectedComponentsPostProcessing(x):
 
             labels = cc3d.connected_components(binary_array[i,:,:,:].astype(int)) # 26-connected
             
+            median = np.median(labels.flatten()) # Label with background, to be excluded
+            
             unique_labels = np.unique(labels.flatten())
+            
+            unique_labels = np.delete(unique_labels, np.where(unique_labels == median)) 
             
             num_labels = len(unique_labels)
             
@@ -786,12 +801,17 @@ def connectedComponentsPostProcessing(x):
                 
                 probs.append(np.mean(x_array[i,1,ind_label[0],ind_label[1], ind_label[2]].flatten()))
 
-                
-            if len(probs) > 1:
+            print(probs)
+            
+            plt.figure(figsize = (13,5))
+            
+            plt.imshow(np.mean(labels, axis = -1)), plt.colorbar()
+            
+            if len(probs) > 0:
                 
                 prob_sorted = sorted(probs)
 
-                ind_max = probs.index(prob_sorted[-2]) # Index of connected component with the highest probability of being vessel
+                ind_max = probs.index(max(probs)) # Index of connected component with the highest probability of being vessel
 
                 label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
 
@@ -800,3 +820,198 @@ def connectedComponentsPostProcessing(x):
                 out[i, ind_max[0], ind_max[1], ind_max[2]] = 1
             
     return out
+
+
+#def persistent_homology(
+
+
+
+def distanceTransform(tensor, key):
+    
+    """
+    Compute distance transform of tensor, normalizing it from -1 to +1
+    
+    Params:
+    
+        - tensor: input tensor
+        
+        - key: variable specifying if the computation is inside the network (loss/net)
+        
+    Output:
+    
+        - trans: distance transform output
+    
+    """
+    
+    # Disallow gradients from this section
+    
+    #with torch.no_grad():
+    
+    if key == 'net' or key == 'NET' or key == 'Net':
+        
+        numpy_tensor = tensor.detach().cpu().numpy()
+        
+    elif key == 'loss' or key == 'LOSS' or key == 'Loss':
+        
+        numpy_tensor = tensor.cpu().numpy()
+
+    batch_len = numpy_tensor.shape[0]
+
+    if key == 'net' or key == 'NET' or key == 'Net':
+
+        classes = numpy_tensor.shape[1]
+
+    elif key == 'loss' or key == 'LOSS' or key == 'Loss':
+
+        classes = 1
+
+    trans_numpy = np.zeros(numpy_tensor.shape)
+
+    trans_numpy_inv = np.zeros(numpy_tensor.shape)
+
+    for batch_ind in range(batch_len):
+
+        for cl in range(classes):
+
+            if key == 'net' or key == 'NET' or key == 'Net':
+
+                if len(numpy_tensor.shape) == 5:
+
+                    numpy_tensor[batch_ind, cl, :, :, :] = (numpy_tensor[batch_ind, cl, :, :, :] - np.amin(numpy_tensor[batch_ind, cl, :, :, :]))/(np.amax(numpy_tensor[batch_ind, cl, :, :, :]) - np.amin(numpy_tensor[batch_ind, cl, :, :, :]))
+
+                    trans_numpy[batch_ind, cl, :, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, cl, :, :, :])
+
+
+                elif len(numpy_tensor.shape) == 4:
+
+                    numpy_tensor[batch_ind, cl, :, :] = (numpy_tensor[batch_ind, cl, :, :] - np.amin(numpy_tensor[batch_ind, cl, :, :]))/(np.amax(numpy_tensor[batch_ind, cl, :, :]) - np.amin(numpy_tensor[batch_ind, cl, :, :]))
+
+
+                    trans_numpy[batch_ind, cl, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, cl, :, :])
+
+                trans_numpy_final = np.copy(trans_numpy)  
+
+            elif key == 'loss' or key == 'LOSS' or key == 'Loss':
+
+                if len(numpy_tensor.shape) == 4:
+
+                    numpy_tensor[batch_ind, :, :, :] = (numpy_tensor[batch_ind, :, :, :] - np.amin(numpy_tensor[batch_ind, :, :, :]))/(np.amax(numpy_tensor[batch_ind, :, :, :]) - np.amin(numpy_tensor[batch_ind, :, :, :]))
+
+                    numpy_tensor_inv = np.abs(1 - numpy_tensor) # Inverted tensor
+
+                    trans_numpy[batch_ind, :, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, :, :, :])
+
+                    trans_numpy_inv[batch_ind, :, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor_inv[batch_ind, :, :, :])
+
+                elif len(numpy_tensor.shape) == 3:
+
+                    numpy_tensor[batch_ind, :, :] = (numpy_tensor[batch_ind, :, :] - np.amin(numpy_tensor[batch_ind, :, :]))/(np.amax(numpy_tensor[batch_ind, :, :]) - np.amin(numpy_tensor[batch_ind, :, :]))
+
+                    numpy_tensor_inv = np.abs(1 - numpy_tensor) # Inverted tensor
+
+                    trans_numpy[batch_ind, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, :, :])
+
+                    trans_numpy_inv[batch_ind, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor_inv[batch_ind, :, :])
+
+                trans_numpy_final = trans_numpy - trans_numpy_inv
+
+
+    # Normalization from -1 to +1
+    
+    if np.sum(trans_numpy_final.flatten()) > 0:
+        
+        warnings.filterwarnings("ignore")
+
+        trans_numpy_final = (trans_numpy_final - np.amin(trans_numpy_final))/(np.amax(trans_numpy_final) - np.amin(trans_numpy_final))
+
+        trans_numpy_final = 2*trans_numpy_final - 1
+
+        trans = torch.tensor(trans_numpy_final)
+        
+    else:
+        
+        # Avoid empty distance transforms
+        
+        trans = torch.ones(numpy_tensor.shape)
+        
+    if key == 'net' or key == 'NET' or key == 'Net':
+        
+        trans.requires_grad = True
+
+    return trans
+                        
+
+    
+def distance_loss(output, target):
+    
+    """
+    Computes Distance loss to reduce the impact of false positives and refine vessel boundaries.
+    
+    Params:
+        
+        - output: result from the network
+        
+        - target: ground truth result
+        
+    Returns:
+        
+        - Distance loss
+        
+    """
+    
+    output = torch.argmax(output, 1)
+    
+    output_dist = distanceTransform(output, 'loss')
+    
+    #output_dist = torch.tensor(output_dist, requires_grad = True) # Allow for backprop
+    
+    target_dist = distanceTransform(target, 'loss')
+    
+    l1_loss = nn.L1Loss()
+    
+    return l1_loss(output_dist, target_dist)
+
+
+
+def focal_distance_loss(output, target, iteration, total):
+    
+    
+    """
+    Computes Focal + Distance loss to improve result overlap while reducing the impact of false positives and refine vessel boundaries. The distance loss will be weighted with a scheduling process
+    
+    Params:
+        
+        - output: result from the network
+        
+        - target: ground truth result
+        
+        - iteration: iteration number
+        
+        - total: total number of training iterations
+        
+    Returns:
+        
+        - Distance loss
+        
+    """
+    
+    focal = focal_loss(output, target)
+    
+    distance = distance_loss(output, target)
+    
+    
+    #if iteration < total//2:
+        
+        # Before reaching half of the iterations, increasing weight
+        
+     #   distance_weight = 2*iteration/total
+        
+    #else:
+        
+        # After half of iterations, weight of 1. Same importance as focal loss
+        
+     #   distance_weight = 1
+
+        
+   
+    return focal + distance

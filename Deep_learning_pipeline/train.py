@@ -99,7 +99,7 @@ def optimizerExtractor(net):
 
 
 
-def lossSelection(output, Y):
+def lossSelection(output, Y, i):
     
     """
     Select the desired loss function among a set of possible options in the 
@@ -110,6 +110,9 @@ def lossSelection(output, Y):
         - output: result from network
         
         - Y: ground truth
+        
+        - i: iteration number
+        
     
     """
     
@@ -170,6 +173,12 @@ def lossSelection(output, Y):
     elif params.loss_fun == 'focal_cc':
         
         loss = utilities.focal_cc_loss(output, Y.cuda(non_blocking=True), 0.1)
+        
+        found = 1
+        
+    elif params.loss_fun == 'focal_distance':
+        
+        loss = utilities.focal_distance_loss(output, Y.cuda(non_blocking=True), i, params.I)
         
         found = 1
     
@@ -363,7 +372,7 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                     output = net(Xpart.cuda(non_blocking=True))
                     
-                    loss = lossSelection(output, Ypart) # Computed loss 
+                    loss = lossSelection(output, Ypart, i) # Computed loss
                     
                     losses.append(loss.item())
 

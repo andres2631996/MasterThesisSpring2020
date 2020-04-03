@@ -381,6 +381,8 @@ class UNet_with_Residuals(nn.Module):
 #        self.Ru0 = Res_Up(128,64)
 
         self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
+    
+        self.dl = DistanceLayer(len(params.class_weights)*2, len(params.class_weights))
 
     def forward(self, x):
         
@@ -424,6 +426,10 @@ class UNet_with_Residuals(nn.Module):
             e0 = self.pad(e0)
 
         out = self.Rf(self.cat(e0[:,(params.base//2):],d0[:,(params.base//2):]))
+        
+        if params.distance_layer:
+            
+            out = self.dl(out)
 
 
         return out
@@ -932,6 +938,8 @@ class AttentionUNet(nn.Module):
         self.Down2 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 3)),ch_out=params.base*(2**(params.num_layers - 2)), key = 'encoder')
     
         self.Down3 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 2)),ch_out=params.base*(2**(params.num_layers - 1)), key = 'encoder')
+        
+        self.drop = nn.Dropout2d(params.dropout)
    
         
         # Decoder + Attention Gates                                           
@@ -965,10 +973,10 @@ class AttentionUNet(nn.Module):
         x1 = self.Down1(x)
 
         x2 = self.Maxpool(x1)
-        x2 = self.Down2(x2)
+        x2 = self.drop(self.Down2(x2))
         
         x3 = self.Maxpool(x2)
-        x3 = self.Down3(x3)
+        x3 = self.drop(self.Down3(x3))
         
         
         d3 = self.Up3(x3)
@@ -1052,7 +1060,9 @@ class NewAttentionUNet(nn.Module):
         self.Down2 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 3)),ch_out=params.base*(2**(params.num_layers - 2)), key = 'encoder')
     
         self.Down3 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 2)),ch_out=params.base*(2**(params.num_layers - 1)), key = 'encoder')
-   
+       
+    
+        self.drop = nn.Dropout2d(params.dropout)
         
         # Decoder + Attention Gates                                           
                                                    
@@ -1080,9 +1090,9 @@ class NewAttentionUNet(nn.Module):
                            
         x1 = self.Down1(x)
 
-        x2 = self.Down2(x1)
+        x2 = self.drop(self.Down2(x1))
         
-        x3 = self.Down3(x2)
+        x3 = self.drop(self.Down3(x2))
         
         d3 = self.Up_conv3(x3)
         
@@ -1583,4 +1593,39 @@ class UNetRNN(nn.Module):
         out = out.view(params.batch_size, out.shape[1], out.shape[2], out.shape[3], out.shape[0]//params.batch_size)
         
         return out
+    
+    
+class distanceLayer(nn.Module):
+    
+    """
+    Distance processing layer placed at the end of the architecture encoder
+    
+    Params:
+    
+        - x: tensor to be processed in the distance processing layer
+    
+    """
+    
+    
+    def __init__(self, ch_in, ch_out):
         
+        super(distanceLayer, self).__init__()
+        
+        self.cat = Concat()
+        
+        self.conv = nn.Conv2d(ch_in, ch_out, kernel_size=params.kernel_size,stride=1,padding=params.padding,bias=True)
+        
+        self.bn = EncoderNorm_2d(out_chan)
+        
+    
+    def forward(self,x):
+        
+        distance_maps = utilities.distanceTransform(x, 'net')
+        
+        distance_maps = torch.tanh(distance_maps)
+        
+        concat = self.cat(x,distance_maps)
+        
+        conv_out = self.bn(self.conv(concat))
+        
+        return conv_out
