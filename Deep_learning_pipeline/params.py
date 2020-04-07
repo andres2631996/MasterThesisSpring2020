@@ -45,13 +45,13 @@ rep = True # Repetition of minority studies in data presented to the network
 
 prep_step = 'crop' # Level of preprocessing to apply for images to the network
 
-train_with = 'magBF' # Type of images to train with
+train_with = 'mag_' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
 add3d = 0 # Number of past and future neighboring slices to build a 2.5D dataset
 
-sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
+sum_work = True # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
 
@@ -84,7 +84,7 @@ rnn = None # Type of recurrent architecture to be integrated with U-Net
 
 rnn_position = 'full' # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'AttentionUNet' # Architecture type
+architecture = 'UNet_with_Residuals' # Architecture type
 
 #architecture = 'UNetRNN'
 
@@ -100,7 +100,7 @@ padding = 1 # Padding for architecture
 
 num_layers = 3 # Number of encoder and decoder layers to be used
 
-distance_layer = False # If True, use a layer with that computes distance maps as extra features at the end of the encoder 
+#distance_layer = True # If True, use a layer with that computes distance maps as extra features at the end of the encoder 
 
 if three_D or (not(three_D) and add3d > 0):
     
@@ -156,7 +156,7 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.000001 # Learning rate
+lr = 0.00001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
@@ -170,7 +170,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal_distance' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, tversky, focal_tversky, exp_log, bce or bce_dice loss
+loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, tversky, focal_tversky, exp_log, bce or bce_dice loss
 
 loss_beta = 0.3
 

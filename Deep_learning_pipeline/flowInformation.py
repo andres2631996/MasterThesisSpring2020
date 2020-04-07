@@ -391,23 +391,31 @@ class FlowInfo:
                         
                         res = self.flowFromMAT(mat_file)
                         
-                        #if self.study == 'CKD2':
+                        if self.study == 'CKD2':
 
-                            #ind = mat_file.index('.')
+                            ind = mat_file.index('-')
                             
                             #ind_aux = mat_file.index('^')
                             
-                            #filename_save = self.dest_path + self.study + '_' + mat_file[:ind_aux] + '_' + mat_file[(ind_aux + 1): (ind_aux + 5)] + mat_file[-9:-4] + 'flowInfo.txt'
+                            times = 2
                             
-                        #elif self.study == 'Hero' or self.study == 'Extr':
-                        
-                        mask, _,_ = self.readVTK(self.path, mat_file.replace('mat','vtk'))
+                            if '007' in mat_file or '011' in mat_file:
+                                
+                                times = 1
+                            
+                            for time in range(times):
+                                
+                                rep = '_' + str(time)
 
+                                filename_save = self.dest_path + self.study + '_' + mat_file[:ind] + mat_file[24:26] + rep + '.flowInfo.txt'
 
-                        
-                        filename_save = self.path + mat_file[:-4].replace('msk_','') + '_flowInfo.txt'
+                                np.savetxt(filename_save, res)
+                            
+                        #elif self.study == 'Hero' or self.study == 'Extr': # TO BE CHANGED
 
-                        np.savetxt(filename_save, res)
+                            filename_save = self.path + mat_file[:-4].replace('msk_','') + '_flowInfo.txt'
+
+                            #np.savetxt(filename_save, res)
                         
                         
         

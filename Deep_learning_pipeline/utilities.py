@@ -926,18 +926,17 @@ def distanceTransform(tensor, key):
 
         trans_numpy_final = 2*trans_numpy_final - 1
 
-        trans = torch.tensor(trans_numpy_final)
+        trans = torch.tensor(trans_numpy_final, requires_grad = True, device = 'cuda:0')
         
     else:
         
         # Avoid empty distance transforms
         
-        trans = torch.ones(numpy_tensor.shape)
+        trans = torch.ones(numpy_tensor.shape, requires_grad = True, device = 'cuda:0')
         
-    if key == 'net' or key == 'NET' or key == 'Net':
-        
-        trans.requires_grad = True
 
+ 
+        
     return trans
                         
 
@@ -1000,18 +999,18 @@ def focal_distance_loss(output, target, iteration, total):
     distance = distance_loss(output, target)
     
     
-    #if iteration < total//2:
+    if iteration < total//2:
         
         # Before reaching half of the iterations, increasing weight
         
-     #   distance_weight = 2*iteration/total
+        distance_weight = 2*iteration/total
         
-    #else:
+    else:
         
         # After half of iterations, weight of 1. Same importance as focal loss
         
-     #   distance_weight = 1
+        distance_weight = 1
 
         
    
-    return focal + distance
+    return focal + distance_weight*distance

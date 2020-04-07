@@ -24,6 +24,8 @@ import cc3d
 
 from skimage import measure
 
+import utilities
+
 
 class Concat(nn.Module):
     
@@ -308,6 +310,44 @@ class addRowCol(nn.Module):
         
         return final
     
+    
+    
+    
+class distanceLayer(nn.Module):
+    
+    """
+    Distance processing layer placed at the end of the architecture encoder
+    
+    Params:
+    
+        - x: tensor to be processed in the distance processing layer
+    
+    """
+    
+    
+    def __init__(self, ch_in, ch_out):
+        
+        super(distanceLayer, self).__init__()
+        
+        self.cat = Concat()
+        
+        self.conv = nn.Conv2d(ch_in, ch_out, kernel_size=params.kernel_size,stride=1,padding=params.padding,bias=True)
+        
+        self.bn = EncoderNorm_2d(ch_out)
+        
+    
+    def forward(self,x):
+        
+        distance_maps = utilities.distanceTransform(x, 'net')
+        
+        distance_maps = torch.tanh(distance_maps)
+        
+        concat = self.cat(x,distance_maps.float())
+        
+        conv_out = self.bn(self.conv(concat))
+        
+        return conv_out
+    
 
 
 class UNet_with_Residuals(nn.Module):
@@ -381,8 +421,7 @@ class UNet_with_Residuals(nn.Module):
 #        self.Ru0 = Res_Up(128,64)
 
         self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
-    
-        self.dl = DistanceLayer(len(params.class_weights)*2, len(params.class_weights))
+        
 
     def forward(self, x):
         
@@ -426,10 +465,6 @@ class UNet_with_Residuals(nn.Module):
             e0 = self.pad(e0)
 
         out = self.Rf(self.cat(e0[:,(params.base//2):],d0[:,(params.base//2):]))
-        
-        if params.distance_layer:
-            
-            out = self.dl(out)
 
 
         return out
@@ -507,6 +542,7 @@ class UNet_with_ResidualsFourLayers(nn.Module):
 
         self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
 
+
     def forward(self, x):
         
         if params.normalization is not None:
@@ -549,6 +585,7 @@ class UNet_with_ResidualsFourLayers(nn.Module):
             e0 = self.pad(e0)
 
         out = self.Rf(self.cat(e0[:,(params.base//2):],d0[:,(params.base//2):]))
+
 
 
         return out
@@ -602,6 +639,9 @@ class connectedComponents(nn.Module):
             for i in range(binary_array.shape[0]):
             
                 labels = cc3d.connected_components(binary_array[i,:,:]) # 26-connected
+                
+                
+                
     
 class NewUNet_with_Residuals(nn.Module):
     
@@ -674,6 +714,7 @@ class NewUNet_with_Residuals(nn.Module):
 #        self.Ru0 = Res_Up(128,64)
 
         self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
+
 
     def forward(self, x):
         
@@ -958,7 +999,6 @@ class AttentionUNet(nn.Module):
 
         self.Conv_1x1 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1,  stride=1,padding=0)
                            
-     
                            
     def forward(self,x):
                            
@@ -1076,8 +1116,6 @@ class NewAttentionUNet(nn.Module):
 
         self.Conv_1x1 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
                            
-     
-                           
     def forward(self,x):
                            
         if params.three_D or (not(params.three_D) and params.add3d > 0):
@@ -1107,6 +1145,7 @@ class NewAttentionUNet(nn.Module):
         if params.three_D or (not(params.three_D) and params.add3d > 0):
             
             d1 = d1.view(params.batch_size, d1.shape[1], d1.shape[2], d1.shape[3], d1.shape[0]//params.batch_size)
+            
 
         return d1                            
 
@@ -1535,7 +1574,6 @@ class UNetRNN(nn.Module):
         self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
         
         
-        
     def forward(self, x):
         
         # Reshape input: (B, C, H, W, T) --> (B*T, C, H, W)
@@ -1591,41 +1629,7 @@ class UNetRNN(nn.Module):
         # Reshape output to original dimensions for loss function computation with respect to corresponding mask
         
         out = out.view(params.batch_size, out.shape[1], out.shape[2], out.shape[3], out.shape[0]//params.batch_size)
+
         
         return out
     
-    
-class distanceLayer(nn.Module):
-    
-    """
-    Distance processing layer placed at the end of the architecture encoder
-    
-    Params:
-    
-        - x: tensor to be processed in the distance processing layer
-    
-    """
-    
-    
-    def __init__(self, ch_in, ch_out):
-        
-        super(distanceLayer, self).__init__()
-        
-        self.cat = Concat()
-        
-        self.conv = nn.Conv2d(ch_in, ch_out, kernel_size=params.kernel_size,stride=1,padding=params.padding,bias=True)
-        
-        self.bn = EncoderNorm_2d(out_chan)
-        
-    
-    def forward(self,x):
-        
-        distance_maps = utilities.distanceTransform(x, 'net')
-        
-        distance_maps = torch.tanh(distance_maps)
-        
-        concat = self.cat(x,distance_maps)
-        
-        conv_out = self.bn(self.conv(concat))
-        
-        return conv_out

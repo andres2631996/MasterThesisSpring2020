@@ -181,6 +181,12 @@ def lossSelection(output, Y, i):
         loss = utilities.focal_distance_loss(output, Y.cuda(non_blocking=True), i, params.I)
         
         found = 1
+        
+    elif params.loss_fun == 'distance':
+        
+        loss = utilities.distance_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
     
     else:
         
