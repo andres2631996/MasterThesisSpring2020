@@ -39,9 +39,11 @@ import math
 
 import warnings
 
+from scipy.ndimage.morphology import binary_dilation
 
 
-def dice_loss(output, target, weights = params.loss_weights):
+
+def dice_loss(output, target):
     
     """
     Computes normal Dice loss.
@@ -58,17 +60,15 @@ def dice_loss(output, target, weights = params.loss_weights):
     
     """
 
-    output_softmax = F.softmax(output, dim=1)
-
-    output_flat = output_softmax[:,1].view(-1)
+    output_flat = output.view(-1)
     
     target_flat = target.view(-1)
     
-    intersection = 2*weights[1]*(torch.mul(output_flat, target_flat)).sum()
+    intersection = torch.mul(output_flat, target_flat).sum()
     
     denominator = torch.mul(output_flat, output_flat).sum() + torch.mul(target_flat, target_flat).sum()
     
-    dice_loss = (intersection + 1)/(denominator + 1)
+    dice_loss = (intersection + 1e-10)/(denominator + 1e-10)
     
     return 1 - dice_loss
 
@@ -140,21 +140,31 @@ def generalized_dice_loss(output, target):
     
     """
 
-    # Compute weights: "the contribution of each label is corrected by the inverse of its volume"
+    # Compute weights: map of dilation - original image
     
-    Ncl = output.shape[1]
+    target_array = target.cpu().numpy()
     
-    w = np.zeros((Ncl,))
+    # Target dilation
     
-    target_array = target.numpy()
+    dilated_target = binary_dilation(target_array, iterations = 2)
     
-    weight = np.sum(target_array==1,np.int8)/np.prod(np.array(target.shape))
+    # Weight map calculation
     
-    w = [1-weight, weight]
+    weight_map = 1 + dilated_target - target_array
     
-    w = 1/(w**2+0.00001)
+    ind_to_correct = np.where(weight_map == 2)
+    
+    weight_map[ind_to_correct] = 0.2
+    
+    # Multiply weight map to softmax output
+    
+    output_softmax = F.softmax(output, dim=1)
+    
+    output_softmax = output_softmax[:,1]
+    
+    weighted_output = torch.mul(torch.tensor(weight_map).cuda(), output_softmax)
 
-    dice = dice_loss(output, target, weights = w)
+    dice = dice_loss(weighted_output, target)
     
     return dice
 
@@ -502,7 +512,7 @@ def model_loading(model, optimizer, path, filename):
     
         if filename in files:
             
-            print("=> loading model '{}'".format(filename))
+            #print("=> loading model '{}'".format(filename))
             
             checkpoint = torch.load(file)
             
@@ -737,6 +747,8 @@ def connectedComponentsPostProcessing(x):
 
     x_array = x.cpu().numpy() # B,C,H,W (T)
     
+    center = np.array(x_array.shape)//2
+    
     binary_array = torch.argmax(x, 1).cpu().numpy() # Inference output
 
     # Get labels from connected components for all elements in batch
@@ -747,9 +759,13 @@ def connectedComponentsPostProcessing(x):
 
         for i in range(x_array.shape[0]):
 
-            labels = measure.label(x_array[i,:,:], background = 0)
+            labels = measure.label(binary_array[i,:,:], background = 0)
+            
+            median = np.median(labels.flatten()) # Label with background, to be excluded
             
             unique_labels = np.unique(labels.flatten())
+            
+            unique_labels = np.delete(unique_labels, np.where(unique_labels == median)) 
             
             num_labels = len(unique_labels)
             
@@ -758,16 +774,18 @@ def connectedComponentsPostProcessing(x):
             for label in unique_labels:
 
                 ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+                
+                center_component = [np.mean(ind_label[0].flatten()), np.mean(ind_label[1].flatten())]
 
                 # Extract the mean value of each connected component
                 
-                probs.append(np.mean(x_array[i,0,ind_label[0],ind_label[1]].flatten()))
+                probs.append(np.sum(np.abs(np.array(center_component) - np.array([center[-2],center[-1]]))))
                 
             prob_sorted = sorted(probs)
             
-            if len(probs) > 1:
+            if len(probs) > 0:
                 
-                ind_max = probs.index(prob_sorted[-2]) # Index of connected component with the highest probability of being vessel
+                ind_max = probs.index(prob_sorted[0]) # Index of connected component with the highest probability of being vessel
 
                 label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
 
@@ -796,28 +814,27 @@ def connectedComponentsPostProcessing(x):
             for label in unique_labels:
 
                 ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+                
+                center_component = [np.mean(ind_label[0].flatten()), np.mean(ind_label[1].flatten()), np.mean(ind_label[2].flatten())]
 
                 # Extract the mean value of each connected component
                 
-                probs.append(np.mean(x_array[i,1,ind_label[0],ind_label[1], ind_label[2]].flatten()))
+                probs.append(np.sum(np.abs(np.array(center_component) - np.array([center[-3], center[-2],center[-1]]))))
 
-            print(probs)
-            
-            plt.figure(figsize = (13,5))
-            
-            plt.imshow(np.mean(labels, axis = -1)), plt.colorbar()
             
             if len(probs) > 0:
                 
                 prob_sorted = sorted(probs)
 
-                ind_max = probs.index(max(probs)) # Index of connected component with the highest probability of being vessel
+                ind_max = probs.index(min(probs)) # Index of connected component with the highest probability of being vessel
 
                 label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
 
                 ind_max = np.array(np.where(labels == label_max)) # Spatial coordinates of connected component with the highest probability
 
                 out[i, ind_max[0], ind_max[1], ind_max[2]] = 1
+                
+    out = out.cuda()
             
     return out
 
@@ -1014,3 +1031,90 @@ def focal_distance_loss(output, target, iteration, total):
         
    
     return focal + distance_weight*distance
+
+
+
+def dice_coef(mask1, mask2):
+    
+    """
+    Computes Dice coefficient between two masks, so to know the similarity between them, to study interobserver variability
+    
+    - mask1 & mask2: binary arrays from where Dice coefficient is computed
+    
+    
+    Returns:
+    
+    - dice: Dice coefficient value
+    
+    """
+    
+    mask1 = mask1 > 0
+    
+    mask2 = mask2 > 0
+    
+    prod = mask1*mask2
+    
+    eps = np.finfo(float).eps
+    
+    dice = 2*(np.sum(prod.flatten()) + eps)/(np.sum(mask1.flatten()) + np.sum(mask2.flatten()) + eps)
+    
+    return dice
+
+
+def precision(mask1, mask2):
+
+    """
+    Computes Dice coefficient between two masks, so to know the similarity between them, to study interobserver variability
+    
+    - mask1 & mask2: binary arrays from where Dice coefficient is computed
+    
+    
+    Returns:
+    
+    - precision: precision value
+    
+    """
+    
+    mask1 = mask1 > 0
+    
+    mask2 = mask2 > 0
+    
+    prod = mask1*mask2
+    
+    eps = np.finfo(float).eps
+    
+    num = np.sum(prod.flatten())
+    
+    den = np.sum(mask1.flatten())
+    
+    return (num + eps)/(den + eps)
+
+
+
+def recall(mask1, mask2):
+
+    """
+    Computes Dice coefficient between two masks, so to know the similarity between them, to study interobserver variability
+    
+    - mask1 & mask2: binary arrays from where Dice coefficient is computed
+    
+    
+    Returns:
+    
+    - precision: precision value
+    
+    """
+    
+    mask1 = mask1 > 0
+    
+    mask2 = mask2 > 0
+    
+    prod = mask1*mask2
+    
+    eps = np.finfo(float).eps
+    
+    num = np.sum(prod.flatten())
+    
+    den = np.sum(mask2.flatten())
+    
+    return (num + eps)/(den + eps)

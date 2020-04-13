@@ -438,7 +438,7 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                     #results_train = evaluate.evaluate(net, loader_train, i)
                     
-                    results_eval = evaluate.evaluate(net, loader_val, i)
+                    results_eval = evaluate.evaluate(net, loader_val, i, 'val')
 
                     eval_metrics.append(results_eval)
                     

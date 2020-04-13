@@ -815,11 +815,11 @@ class conv_res_block(nn.Module):
         self.Conv_1x1 = nn.Conv2d(ch_in,ch_out,kernel_size=params.kernel_size,stride=1,padding=1)
 
 
-    def forward(self,x):
+    def forward(self,x, key):
         
         x0 = self.Conv_1x1(x)
         
-        if params.rnn is not None:
+        if params.rnn_position == 'full' or params.rnn_position == key:
             
             x = x.view(params.batch_size, x.shape[0]//params.batch_size, x.shape[-3], x.shape[-2], x.shape[-1])
         
@@ -1010,13 +1010,13 @@ class AttentionUNet(nn.Module):
                            
         # encoding path
                            
-        x1 = self.Down1(x)
+        x1 = self.Down1(x, 'encoder')
 
         x2 = self.Maxpool(x1)
-        x2 = self.drop(self.Down2(x2))
+        x2 = self.drop(self.Down2(x2, 'encoder'))
         
         x3 = self.Maxpool(x2)
-        x3 = self.drop(self.Down3(x3))
+        x3 = self.drop(self.Down3(x3, 'encoder'))
         
         
         d3 = self.Up3(x3)
@@ -1026,7 +1026,7 @@ class AttentionUNet(nn.Module):
             d3 = self.pad(d3)
         
         x2 = self.Att3(g=d3,x=x2)
-        d3 = self.Up_conv3(self.cat(x2,d3))
+        d3 = self.Up_conv3(self.cat(x2,d3), 'decoder')
 
         d2 = self.Up2(d3)
         
@@ -1035,7 +1035,7 @@ class AttentionUNet(nn.Module):
             d2 = self.pad(d2)
         
         x1 = self.Att2(g=d2,x=x1)
-        d2 = self.Up_conv2(self.cat(x1,d2))
+        d2 = self.Up_conv2(self.cat(x1,d2), 'decoder')
 
         d1 = self.Conv_1x1(d2)
         
@@ -1126,17 +1126,17 @@ class NewAttentionUNet(nn.Module):
                            
         # encoding path
                            
-        x1 = self.Down1(x)
+        x1 = self.Down1(x, 'encoder')
 
-        x2 = self.drop(self.Down2(x1))
+        x2 = self.drop(self.Down2(x1, 'encoder'))
         
-        x3 = self.drop(self.Down3(x2))
+        x3 = self.drop(self.Down3(x2, 'encoder'))
         
         d3 = self.Up_conv3(x3)
         
         x2 = self.Att3(g=d3,x=x2)
         
-        d2 = self.Up_conv2(self.cat(x2[:,(params.base*(2**(params.num_layers - 3))):],d3[:,(params.base*(2**(params.num_layers - 3))):]))
+        d2 = self.Up_conv2(self.cat(x2[:,(params.base*(2**(params.num_layers - 3))):],d3[:,(params.base*(2**(params.num_layers - 3))):]), 'decoder')
         
         x1 = self.Att2(g=d2,x=x1)
 

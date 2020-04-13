@@ -28,6 +28,8 @@ import math
 
 import matplotlib.pyplot as plt
 
+import utilities
+
 
     
     
@@ -285,7 +287,7 @@ class Recall():
 
 
 
-def evaluate(net, loader, iteration):
+def evaluate(net, loader, iteration, key):
     
     """
     Evaluations done during cross-validation
@@ -295,6 +297,8 @@ def evaluate(net, loader, iteration):
     :param loader:
         
     :param iteration:
+    
+    :param: key: tells if evaluation is done for validation ("val") or for testing ("testing")
 
     :return:
     """
@@ -319,8 +323,16 @@ def evaluate(net, loader, iteration):
         recalls = [] # List with evaluated recalls
         
         results = [] # List with overall results: METRIC NAME, MEAN AND STD!!
+        
+        ground_truths = [] # List for saving ground truths during model testing
+        
+        net_results = [] # List for saving network results during model testing
+        
+        names = [] # List for saving filenames that are being evaluated during testing
+        
+        raw_files = [] # List for saving raw files to be evaluated in the testing process
 
-        for X, Y, _ in loader:
+        for X, Y, n in loader:
             
             # Extracts the data from dataloader and puts it into the network
 
@@ -331,92 +343,129 @@ def evaluate(net, loader, iteration):
                 
                 stopXIndex = min((i+1)*batch_gpu, X.shape[0])
                 
-                stopYIndex = min((i+1)*batch_gpu, Y.shape[0])
+                if len(Y) != 0:
+                
+                    stopYIndex = min((i+1)*batch_gpu, Y.shape[0])
                 
                 if params.three_D: # Training in 2D with one channel
     
                     x_part = X[startIndiex:stopXIndex,:,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
-
-                    y_part = Y[startIndiex:stopYIndex,:,:,:].cuda()
+                    
+                    if len(Y) != 0:
+            
+                        y_part = Y[startIndiex:stopYIndex,:,:,:].cuda()
                 
                 else:
 
                     x_part = X[startIndiex:stopXIndex,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
                     
-                    y_part = Y[startIndiex:stopYIndex,:,:].cuda()
+                    if len(Y) != 0:
+                    
+                        y_part = Y[startIndiex:stopYIndex,:,:].cuda()
 
                 
                 output = net(x_part).data #Run the samples though the network and get the predictions
                 
-                output = torch.argmax(output, 1).cuda() #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
-
-                
-                for j in range(x_part.shape[0]):
+                if key == 'test':
                     
-                    for metric in metrics:
-                        
-                        if metric == 'Dice' or metric == 'dice' or metric == 'DICE':
-                            
-                            dice = Dice(y_part, output)
-                            
-                            dices.append(dice.online())
+                    #output = utilities.connectedComponentsPostProcessing(output)
+                    
+                    output = torch.argmax(output, 1).cuda()
+                
+                    net_results.append(output.cpu().numpy())
+                    
+                    raw_files.append(x_part.cpu().numpy())
+                    
+                    if len(Y) != 0:
+                
+                        ground_truths.append(y_part.cpu().numpy())
+                    
+                    names.append(list(n)[0])
+                    
+                else:
+                    
+                    output = torch.argmax(output, 1).cuda() #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
+                    
+                if len(Y) != 0:
+                
+                    for j in range(x_part.shape[0]):
 
-                        elif metric == 'Precision' or metric == 'PRECISION' or metric == 'precision':
-                            
-                            prec = Precision(y_part, output)
-                            
-                            precisions.append(prec.online())
-                        
-                        
-                        elif metric == 'Recall' or metric == 'recall' or metric == 'RECALL':
-                            
-                            rec = Recall(y_part, output)
-                            
-                            recalls.append(rec.online())
-                        
-                        
-                        else:
-                            
-                            print('Unspecified metric. Please provide an adequate metric (Dice/Precision/Recall)\n')
-                            
-                            exit()
+                        for metric in metrics:
 
+                            if metric == 'Dice' or metric == 'dice' or metric == 'DICE':
+
+                                dice = Dice(y_part, output)
+
+                                dices.append(dice.online())
+
+                            elif metric == 'Precision' or metric == 'PRECISION' or metric == 'precision':
+
+                                prec = Precision(y_part, output)
+
+                                precisions.append(prec.online())
+
+
+                            elif metric == 'Recall' or metric == 'recall' or metric == 'RECALL':
+
+                                rec = Recall(y_part, output)
+
+                                recalls.append(rec.online())
+
+
+                            else:
+
+                                print('Unspecified metric. Please provide an adequate metric (Dice/Precision/Recall)\n')
+
+                                exit()
+        
+        
+        if len(Y) != 0:
                             
-        if ('Dice' in metrics) or ('dice' in metrics) or ('DICE' in metrics):
-            
-            mean_dice = np.mean(np.array(dices))
-            
-            std_dice = np.std(np.array(dices))
-            
-            name = 'dice'
-            
-            results.append([name, str(mean_dice) + ' ', str(std_dice) + ' ', iteration])
-            
+            if ('Dice' in metrics) or ('dice' in metrics) or ('DICE' in metrics):
+
+                mean_dice = np.mean(np.array(dices))
+
+                std_dice = np.std(np.array(dices))
+
+                name = 'dice'
+
+                results.append([name, str(mean_dice) + ' ', str(std_dice) + ' ', iteration])
+
+
+
+            if ('Precision' in metrics) or ('precision' in metrics) or ('PRECISION' in metrics):
+
+                mean_prec = np.mean(np.array(precisions))
+
+                std_prec = np.std(np.array(precisions))
+
+                name = 'precision'
+
+                results.append([name, str(mean_prec) + ' ', str(std_prec) + ' ', iteration])
+
+
+            if ('Recall' in metrics) or ('recall' in metrics) or ('RECALL' in metrics):
+
+                mean_rec = np.mean(np.array(recalls))
+
+                std_rec = np.std(np.array(recalls))
+
+                name = 'recall'
+
+                results.append([name, str(mean_rec) + ' ', str(std_rec) + ' ', iteration])
+    
+    
+    if key == 'val':
         
+        return results
+    
+    elif key == 'test':
         
-        if ('Precision' in metrics) or ('precision' in metrics) or ('PRECISION' in metrics):
-            
-            mean_prec = np.mean(np.array(precisions))
-            
-            std_prec = np.std(np.array(precisions))
-            
-            name = 'precision'
-            
-            results.append([name, str(mean_prec) + ' ', str(std_prec) + ' ', iteration])
-            
+        return results, raw_files, net_results, ground_truths, names
+    
+    else:
         
-        if ('Recall' in metrics) or ('recall' in metrics) or ('RECALL' in metrics):
-            
-            mean_rec = np.mean(np.array(recalls))
-            
-            std_rec = np.std(np.array(recalls))
-            
-            name = 'recall'
-            
-            results.append([name, str(mean_rec) + ' ', str(std_rec) + ' ', iteration])
-        
-        
-    return results
+        print('Wrong key introduced. Please introduce "val" for model validation or "test" for model testing')
         
         
         
