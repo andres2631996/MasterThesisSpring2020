@@ -254,7 +254,7 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
                 
                 # Points
                 
-                plt.scatter(result, reference, color = 'black', label = 'Measured points')
+                plt.scatter(reference, result, color = 'black', label = 'Measured points')
                 
                 # Regression line
                 
@@ -341,4 +341,23 @@ def bland_altman_plot(result, reference, save = False, dest_path = os.getcwd() +
         print('Result or reference vectors are not 1D. Please reformat them to be 1D')
     
     
+def correlation(result, reference):
+ 
+    """
+    Compute Pearson correlation coefficient (r) between network result and ground-truth
     
+    Params:
+    
+        - result: network result
+        
+        - reference: ground-truth
+        
+    Returns:
+    
+        - r: Pearson correlation coefficient
+
+    """
+    
+    r = np.corrcoef(result, reference)[0,1]
+    
+    return r
