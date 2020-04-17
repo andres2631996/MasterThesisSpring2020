@@ -47,9 +47,9 @@ prep_step = 'crop' # Level of preprocessing to apply for images to the network
 
 train_with = 'magBF' # Type of images to train with
 
-three_D = True # Train with separate 2D slices or 2D + time volumes
+three_D = False # Train with separate 2D slices or 2D + time volumes
 
-add3d = 0 # Number of past and future neighboring slices to build a 2.5D dataset
+add3d = 5 # Number of past and future neighboring slices to build a 2.5D dataset
 
 sum_work = True # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
@@ -82,9 +82,9 @@ k = 4 # Number of cross validation folds
 
 rnn = 'GRU' # Type of recurrent architecture to be integrated with U-Net
 
-rnn_position = 'encoder' # Part of the U-Net with recurrent modules (encoder/decoder/full)
+rnn_position = 'full' # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'AttentionUNet' # Architecture type
+architecture = 'Hourglass' # Architecture type
 
 #architecture = 'UNetRNN'
 
@@ -146,7 +146,7 @@ I = 75000
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*10000
+eval_frequency = batch_size*5000
 
 loss_frequency = batch_size*1000
 
@@ -156,16 +156,13 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.000001 # Learning rate
+lr = 0.0001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
 step = I/10 # Step for LR scheduling
 
 lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
-
-
-
 
 
 # Loss function parameters

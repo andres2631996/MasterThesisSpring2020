@@ -371,15 +371,27 @@ def evaluate(net, loader, iteration, key):
                     #output = utilities.connectedComponentsPostProcessing(output)
                     
                     output = torch.argmax(output, 1).cuda()
-                
-                    net_results.append(output.cpu().numpy())
                     
-                    raw_files.append(x_part.cpu().numpy())
-                    
-                    if len(Y) != 0:
-                
-                        ground_truths.append(y_part.cpu().numpy())
-                    
+                    if params.add3d == 0:
+
+                        net_results.append(output.cpu().numpy())
+
+                        raw_files.append(x_part.cpu().numpy())
+
+                        if len(Y) != 0:
+
+                            ground_truths.append(y_part.cpu().numpy())
+                            
+                    else:
+                        
+                        net_results.append(output[:,:,:,params.add3d].cpu().numpy())
+
+                        raw_files.append(x_part[:,:,:,:,params.add3d].cpu().numpy())
+
+                        if len(Y) != 0:
+
+                            ground_truths.append(y_part[:,:,:,params.add3d].cpu().numpy())
+
                     names.append(list(n)[0])
                     
                 else:

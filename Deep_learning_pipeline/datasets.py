@@ -405,7 +405,7 @@ class QFlowDataset(data.Dataset):
                     
                     #else:
                     
-                        if params.three_D:
+                        if params.three_D or (not(params.three_D) and params.add3d > 0):
                             
                             img = img.reshape((img.shape[0], img.shape[1], img.shape[-2]*img.shape[-1]))
 
@@ -419,10 +419,14 @@ class QFlowDataset(data.Dataset):
 
         
             X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float()
+            
+            if len(self.mask_paths) != 0:
 
-            Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
+                Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
             
-            
+            else:
+                
+                Y = []
         
             if params.three_D or (not(params.three_D) and params.add3d > 0):
                 
@@ -433,14 +437,9 @@ class QFlowDataset(data.Dataset):
                 
                 X = X.permute(-1,0,1) # Channels first
             
-            
-            if len(self.mask_paths) != 0:
 
-                return X,Y, mask_path
-            
-            else:
                 
-                return X, raw_path
+            return X, Y, raw_path
         
 
         

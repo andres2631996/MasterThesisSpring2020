@@ -540,7 +540,7 @@ class ExtractRawFiles:
             patients = sorted(os.listdir(self.path))
             
             id_list = ['CKD006','CKD007','CKD008','CKD010','CKD011','CKD014','CKD016',
-                           'CKD017','CKD018','CKD020','CKD048','CKD051','CKD052','CKD054','CKD055']
+                           'CKD017','CKD018','CKD019','CKD020','CKD048','CKD051','CKD052','CKD054','CKD055']
             
             vencs = []
             
@@ -598,17 +598,11 @@ class ExtractRawFiles:
 
                                     final_image = arrays_array[:,:,ind_m[time_m_sort_ind]] # Sorted final image
                                     
-                                    final_image = self.pipeline2(final_image,m)
+                                    #final_image = self.pipeline2(final_image,m)
 
                                     # Structure of final filename: study + patient + right/left kidney + magnitude/phase/other + repeated acquisition
 
-                                    final_filename = self.study + '_' + patientID + '_' + orientation + '_' + m + rep + '_crop.vtk'
-                                  
-                                    # Save as VTK file in provided destination folder
-                                    
-                                    plt.figure(figsize = (13,5))
-                                    
-                                    plt.imshow(final_image[:,:,20], cmap = 'gray'), plt.title(final_filename), plt.colorbar()
+                                    final_filename = self.study + '_' + patientID + '_' + orientation + '_' + m + rep + '.vtk'
 
                                     self.array2vtk(final_image, final_filename, self.dest_path + '_' + m + '/', origin, spacing)
 

@@ -393,29 +393,55 @@ class FlowInfo:
                         
                         if self.study == 'CKD2':
 
-                            ind = mat_file.index('-')
+                            #ind = mat_file.index('-')
                             
-                            #ind_aux = mat_file.index('^')
+                            ind_aux = mat_file.index('^')
                             
-                            times = 2
+                            #times = 2
                             
-                            if '007' in mat_file or '011' in mat_file:
+                            #if '007' in mat_file or '011' in mat_file:
                                 
-                                times = 1
+                             #   times = 1
                             
-                            for time in range(times):
+                            #for time in range(times):
                                 
-                                rep = '_' + str(time)
+                             #   rep = '_' + str(time)
 
-                                filename_save = self.dest_path + self.study + '_' + mat_file[:ind] + mat_file[24:26] + rep + '.flowInfo.txt'
+                            filename_save = self.dest_path + self.study + '_' + mat_file[:ind_aux] + '_' + mat_file[ind_aux + 1: ind_aux + 5] + mat_file[-9:-4] + '_flowInfo.txt'
 
-                                np.savetxt(filename_save, res)
+                            np.savetxt(filename_save, res)
                             
                         #elif self.study == 'Hero' or self.study == 'Extr': # TO BE CHANGED
 
                             filename_save = self.path + mat_file[:-4].replace('msk_','') + '_flowInfo.txt'
 
                             #np.savetxt(filename_save, res)
+                            
+                        elif self.study == 'Extr':
+                            
+                            if '20181213' in mat_file:
+                                
+                                times = 2
+                                
+                            else:
+                                
+                                times = 1
+                                
+                            if 'sin' in mat_file or 'SI' in mat_file:
+                                
+                                orient = 'si'
+                                
+                            elif 'dx' in mat_file or 'DX' in mat_file:
+                     
+                                orient = 'dx'
+                        
+                            if '20190103' in mat_file:
+                                
+                                for time in range(times):
+
+                                    filename_save = self.study + '_' + mat_file[:12] + '_' + orient + '_' + str(time) + '_flowInfo.txt'
+
+                                    np.savetxt(self.dest_path + filename_save, res)
                         
                         
         
