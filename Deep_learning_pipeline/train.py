@@ -169,22 +169,11 @@ def lossSelection(output, Y, i):
         loss = utilities.focal_tversky_loss(output, Y.cuda(non_blocking=True))
         
         found = 1
+
         
-    elif params.loss_fun == 'focal_cc':
+    elif params.loss_fun == 'focal_dice':
         
-        loss = utilities.focal_cc_loss(output, Y.cuda(non_blocking=True), 0.1)
-        
-        found = 1
-        
-    elif params.loss_fun == 'focal_distance':
-        
-        loss = utilities.focal_distance_loss(output, Y.cuda(non_blocking=True), i, params.I)
-        
-        found = 1
-        
-    elif params.loss_fun == 'distance':
-        
-        loss = utilities.distance_loss(output, Y.cuda(non_blocking=True))
+        loss = utilities.focal_dice_loss(output, Y.cuda(non_blocking=True))
         
         found = 1
     

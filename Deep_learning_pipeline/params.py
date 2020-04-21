@@ -49,9 +49,9 @@ train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
-add3d = 5 # Number of past and future neighboring slices to build a 2.5D dataset
+add3d = 2 # Number of past and future neighboring slices to build a 2.5D dataset
 
-sum_work = True # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
+sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
 
@@ -82,9 +82,9 @@ k = 4 # Number of cross validation folds
 
 rnn = 'GRU' # Type of recurrent architecture to be integrated with U-Net
 
-rnn_position = 'full' # Part of the U-Net with recurrent modules (encoder/decoder/full)
+rnn_position = 'encoder' # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'Hourglass' # Architecture type
+architecture = 'TimeDistributedAttentionUNet' # Architecture type
 
 #architecture = 'UNetRNN'
 
@@ -92,7 +92,7 @@ normalization = 'instance' # Normalization type to apply in networks (None/batch
 
 dropout = 0.5 # Dropout rate to apply in networks
 
-base = 64 # Basic number of features to extract in architecture
+base = 64 # Number of features to extract in architecture, in the first layer
 
 kernel_size = 3 # Kernel size for convolutional architecture
 
@@ -104,7 +104,17 @@ num_layers = 3 # Number of encoder and decoder layers to be used
 
 if three_D or (not(three_D) and add3d > 0):
     
-    network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_' + rnn + rnn_position + '_3D/'
+    if rnn is not None and rnn_position is not None:
+    
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_' + rnn + rnn_position + '_3D/'
+        
+    elif rnn is not None and rnn_position is None:
+        
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_' + rnn + '_3D/'
+        
+    elif rnn is None and rnn_position is None:
+        
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_3D/'
     
 else:
     
@@ -129,7 +139,7 @@ RAM_batch_size = 1
 # The maximum amount of samples to be uploaded to the GPU at the same time.
 # Use conservative measure to prevent the program from crashing
 
-batch_GPU_max = 16 # 16
+batch_GPU_max = 32 # 16
 
 batch_GPU_max_inference = 16 # 16
 
@@ -141,7 +151,7 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 75000
+I = 100000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
@@ -156,7 +166,7 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.0001 # Learning rate
+lr = 0.00001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
@@ -167,7 +177,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, tversky, focal_tversky, exp_log, bce or bce_dice loss
+loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, focal_dice, tversky, focal_tversky, exp_log, bce or bce_dice loss
 
 loss_beta = 0.3
 

@@ -291,24 +291,6 @@ def connectedComponents(x):
     return out
 
 
-def connectedComponentLoss(output, target, weight = 1):
-
-    """
-    Compute a loss based on the connected components of the network output and the target
-
-    Params:
-
-        - output: network output (torch.tensor)
-
-        - target: mask (torch.tensor)
-
-    """
-
-    cc_output = connectedComponents(output)
-    
-    cc_target = connectedComponents(target)
-    
-    return weight*(np.sum(np.array(cc_output) - np.array(cc_target)))**2
 
 
 
@@ -359,82 +341,28 @@ def focal_loss(output, target, weights=None, size_average=True, gamma= 1/params.
     return loss
 
 
-def focal_cc_loss(output, target, weight = 0.1):
+
+
+def focal_dice_loss(output, target):
+    
     
     """
-    Combination of focal Dice overlap loss with Connected Components Loss
+    Provide a combination of focal and generalized Dice losses
+    
     
     Params:
     
-        - output: result from the network
+        - output: network result
         
-        - target: ground truth result
-        
-        - weight: weight for the Connected Components Loss
-        
-    Returns:
-        
-        - Combined Focal + Connected Component loss
+        - target: reference
     
     
     """
     
-    focal = focal_loss(output, target)
-    
-    cc = connectedComponentLoss(output, target, 0.1)
-    
-    return focal + cc
+    return focal_loss(output, target) + generalized_dice_loss(output, target)
 
 
 
-
-
-def tversky_loss_scalar(output, target):
-    
-    """
-    Computes Tversky loss.
-    
-    Params:
-        
-        - output: result from the network
-        
-        - target: ground truth result
-        
-    Returns:
-        
-        - Dice loss
-        
-    """
-    
-    output = F.log_softmax(output, dim=1)[:,0]
-    
-    numerator = torch.sum(target * output)
-    
-    denominator = target * output + params.loss_beta * (1 - target) * output + (1 - params.loss_beta) * target * (1 - output)
-
-    return 1 - (numerator) / (torch.sum(denominator))
-
-
-def focal_tversky_loss(output, target):
-    
-    """
-    Computes Focal-Tversky loss.
-    
-    Params:
-        
-        - output: result from the network
-        
-        - target: ground truth result
-        
-    Returns:
-        
-        - Dice loss
-        
-    """
-    
-    tversky_loss = abs(tversky_loss_scalar(output, target))
-    
-    return torch.pow(tversky_loss, params.loss_gamma)
 
 
 def clear_GPU(net=None):
@@ -843,194 +771,6 @@ def connectedComponentsPostProcessing(x):
 
 
 
-def distanceTransform(tensor, key):
-    
-    """
-    Compute distance transform of tensor, normalizing it from -1 to +1
-    
-    Params:
-    
-        - tensor: input tensor
-        
-        - key: variable specifying if the computation is inside the network (loss/net)
-        
-    Output:
-    
-        - trans: distance transform output
-    
-    """
-    
-    # Disallow gradients from this section
-    
-    #with torch.no_grad():
-    
-    if key == 'net' or key == 'NET' or key == 'Net':
-        
-        numpy_tensor = tensor.detach().cpu().numpy()
-        
-    elif key == 'loss' or key == 'LOSS' or key == 'Loss':
-        
-        numpy_tensor = tensor.cpu().numpy()
-
-    batch_len = numpy_tensor.shape[0]
-
-    if key == 'net' or key == 'NET' or key == 'Net':
-
-        classes = numpy_tensor.shape[1]
-
-    elif key == 'loss' or key == 'LOSS' or key == 'Loss':
-
-        classes = 1
-
-    trans_numpy = np.zeros(numpy_tensor.shape)
-
-    trans_numpy_inv = np.zeros(numpy_tensor.shape)
-
-    for batch_ind in range(batch_len):
-
-        for cl in range(classes):
-
-            if key == 'net' or key == 'NET' or key == 'Net':
-
-                if len(numpy_tensor.shape) == 5:
-
-                    numpy_tensor[batch_ind, cl, :, :, :] = (numpy_tensor[batch_ind, cl, :, :, :] - np.amin(numpy_tensor[batch_ind, cl, :, :, :]))/(np.amax(numpy_tensor[batch_ind, cl, :, :, :]) - np.amin(numpy_tensor[batch_ind, cl, :, :, :]))
-
-                    trans_numpy[batch_ind, cl, :, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, cl, :, :, :])
-
-
-                elif len(numpy_tensor.shape) == 4:
-
-                    numpy_tensor[batch_ind, cl, :, :] = (numpy_tensor[batch_ind, cl, :, :] - np.amin(numpy_tensor[batch_ind, cl, :, :]))/(np.amax(numpy_tensor[batch_ind, cl, :, :]) - np.amin(numpy_tensor[batch_ind, cl, :, :]))
-
-
-                    trans_numpy[batch_ind, cl, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, cl, :, :])
-
-                trans_numpy_final = np.copy(trans_numpy)  
-
-            elif key == 'loss' or key == 'LOSS' or key == 'Loss':
-
-                if len(numpy_tensor.shape) == 4:
-
-                    numpy_tensor[batch_ind, :, :, :] = (numpy_tensor[batch_ind, :, :, :] - np.amin(numpy_tensor[batch_ind, :, :, :]))/(np.amax(numpy_tensor[batch_ind, :, :, :]) - np.amin(numpy_tensor[batch_ind, :, :, :]))
-
-                    numpy_tensor_inv = np.abs(1 - numpy_tensor) # Inverted tensor
-
-                    trans_numpy[batch_ind, :, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, :, :, :])
-
-                    trans_numpy_inv[batch_ind, :, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor_inv[batch_ind, :, :, :])
-
-                elif len(numpy_tensor.shape) == 3:
-
-                    numpy_tensor[batch_ind, :, :] = (numpy_tensor[batch_ind, :, :] - np.amin(numpy_tensor[batch_ind, :, :]))/(np.amax(numpy_tensor[batch_ind, :, :]) - np.amin(numpy_tensor[batch_ind, :, :]))
-
-                    numpy_tensor_inv = np.abs(1 - numpy_tensor) # Inverted tensor
-
-                    trans_numpy[batch_ind, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor[batch_ind, :, :])
-
-                    trans_numpy_inv[batch_ind, :, :] = scipy.ndimage.morphology.distance_transform_edt(numpy_tensor_inv[batch_ind, :, :])
-
-                trans_numpy_final = trans_numpy - trans_numpy_inv
-
-
-    # Normalization from -1 to +1
-    
-    if np.sum(trans_numpy_final.flatten()) > 0:
-        
-        warnings.filterwarnings("ignore")
-
-        trans_numpy_final = (trans_numpy_final - np.amin(trans_numpy_final))/(np.amax(trans_numpy_final) - np.amin(trans_numpy_final))
-
-        trans_numpy_final = 2*trans_numpy_final - 1
-
-        trans = torch.tensor(trans_numpy_final, requires_grad = True, device = 'cuda:0')
-        
-    else:
-        
-        # Avoid empty distance transforms
-        
-        trans = torch.ones(numpy_tensor.shape, requires_grad = True, device = 'cuda:0')
-        
-
- 
-        
-    return trans
-                        
-
-    
-def distance_loss(output, target):
-    
-    """
-    Computes Distance loss to reduce the impact of false positives and refine vessel boundaries.
-    
-    Params:
-        
-        - output: result from the network
-        
-        - target: ground truth result
-        
-    Returns:
-        
-        - Distance loss
-        
-    """
-    
-    output = torch.argmax(output, 1)
-    
-    output_dist = distanceTransform(output, 'loss')
-    
-    #output_dist = torch.tensor(output_dist, requires_grad = True) # Allow for backprop
-    
-    target_dist = distanceTransform(target, 'loss')
-    
-    l1_loss = nn.L1Loss()
-    
-    return l1_loss(output_dist, target_dist)
-
-
-
-def focal_distance_loss(output, target, iteration, total):
-    
-    
-    """
-    Computes Focal + Distance loss to improve result overlap while reducing the impact of false positives and refine vessel boundaries. The distance loss will be weighted with a scheduling process
-    
-    Params:
-        
-        - output: result from the network
-        
-        - target: ground truth result
-        
-        - iteration: iteration number
-        
-        - total: total number of training iterations
-        
-    Returns:
-        
-        - Distance loss
-        
-    """
-    
-    focal = focal_loss(output, target)
-    
-    distance = distance_loss(output, target)
-    
-    
-    if iteration < total//2:
-        
-        # Before reaching half of the iterations, increasing weight
-        
-        distance_weight = 2*iteration/total
-        
-    else:
-        
-        # After half of iterations, weight of 1. Same importance as focal loss
-        
-        distance_weight = 1
-
-        
-   
-    return focal + distance_weight*distance
 
 
 

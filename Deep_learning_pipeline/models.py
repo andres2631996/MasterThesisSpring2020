@@ -78,6 +78,9 @@ class ConcatTime(nn.Module):
         
         return cat
     
+    
+
+    
 
 class EncoderNorm_2d(nn.Module):
     
@@ -382,11 +385,7 @@ class addRowCol3d(nn.Module):
     
     def forward(self, x, ref_shape):
         
-        #final = torch.zeros(ref_shape).cuda()
-        
-        #for i in range(final.shape[0]):
-            
-            #for j in range(final.shape[1]):
+        final = torch.zeros(ref_shape).cuda()
         
         final = F.interpolate(x, size=(ref_shape[-3], ref_shape[-2], ref_shape[-1]), mode = 'trilinear', align_corners = False)
         
@@ -1976,6 +1975,434 @@ class Hourglass(nn.Module):
         d1 = d1.view(params.batch_size, d1.shape[2], d1.shape[3], d1.shape[4], d1.shape[1])
 
         return d1 
-                       
+                           
+
+class conv3dnorm(nn.Module):
+    
+    """
+    Provide a 3D convolution followed by a normalization and a PReLU
+    
+    Params:
+    
+        - in_chan: input number of channels
+        
+        - out_chan: output number of channels
+        
+        - kernel: kernel size
+        
+        - stride: stride
+        
+        - padding: padding
+        
+        - activation: activation function to use ('prelu', 'relu' or 'elu')
+        
+        - transpose: flag indicating if the convolution is transpose or not (for upsampling)
+    
+    """
+    
+    def __init__(self, in_chan, out_chan, kernel, stride, padding, activation, transpose):
+        
+        super(conv3dnorm, self).__init__()
+        
+        if transpose:
+            
+            self.conv = nn.ConvTranspose3d(in_chan, out_chan, kernel, stride, padding)
+            
+        else:
+        
+            self.conv = nn.Conv3d(in_chan, out_chan, kernel, stride, padding)
+        
+        self.norm = nn.InstanceNorm3d(out_chan)
+        
+        if activation == 'prelu':
+        
+            self.activ = nn.PReLU(out_chan)
+            
+        elif activation == 'relu':
+            
+            self.activ = nn.ReLU()
+            
+        elif activation == 'elu':
+            
+            self.activ = nn.ELU()
+            
+        else:
+            
+            print('Unrecognized activation function. Please provide a valid key for activation: "elu", "prelu" or "relu"')
+            
+        
+    def forward(self,x):    
+        
+        conv = self.conv(x)
+        
+        norm_conv = self.norm(conv)
+        
+        act_norm_conv = self.activ(norm_conv)
+        
+        return act_norm_conv
+    
+        
+    
+class AttentionVNet(nn.Module):
+    
+    """
+    VNet from Milletari et al. 2016. Process time dimension as a third spatial dimension
+    
+    Include attention gates from Oktay et al. 2018
+    
+    """
+    
+    def __init__(self):
+        
+        super(AttentionVNet, self).__init__()
+    
+        self.cat = Concat()
+
+        self.pad = addRowCol3d()
+
+        self.drop = nn.Dropout3d(p = 0.5)
+
+        # Decide on number of input channels
+
+        if 'both' in params.train_with:
+
+            in_chan = 2
+
+        else:
+
+            in_chan = 1
+
+        # Recommended convolutional parameters: base = 16, kernel = 5x5x5, padding = 2x2x2, stride = 1
+
+        # Downsampling layer 1
+
+        self.conv1 = conv3dnorm(in_chan, params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu1 = nn.PReLU(params.base*(2**(params.num_layers - 3)))
+        
+        self.down1 = conv3dnorm(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', False)
+        
+        # Downsampling layer 2
+
+        self.conv2_1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv2_2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu2 = nn.PReLU(params.base*(2**(params.num_layers - 2)))
+        
+        self.down2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), 2, 2, 0, 'prelu', False)
+        
+        # Downsampling layer 3
+        
+        self.conv3_1 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv3_2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv3_3 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu3 = nn.PReLU(params.base*(2**(params.num_layers - 1)))
+        
+        # Upsampling layer 2
+        
+        self.up2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', True)
+        
+        self.Att2 = Attention_block3d(F_g=params.base*(2**(params.num_layers - 2)),F_l=params.base*(2**(params.num_layers - 2)),F_int=params.base*(2**(params.num_layers - 3)))
+        
+        self.conv2_1up = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv2_2up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu2up = nn.PReLU(params.base*(2**(params.num_layers - 2)))
+       
+        # Upsampling layer 1
+        
+        self.up1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), 2, 2, 0, 'prelu', True)
+        
+        self.Att1 = Attention_block3d(F_g=params.base*(2**(params.num_layers - 3)),F_l= params.base*(2**(params.num_layers - 3)),F_int=int(params.base*(2**(params.num_layers - 4))))
+        
+        self.conv1_1up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu1up = nn.PReLU(params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_2up = conv3dnorm(params.base*(2**(params.num_layers - 3)), len(params.class_weights), 1, 1, 0, 'prelu', False)
+        
+        
+    def forward(self, x):
+        
+        # Tensor reshaping
+            
+        x = x.view(x.shape[0], x.shape[1], x.shape[-1], x.shape[2], x.shape[-2])
+        
+        # Downsampling layer 1
+
+        x1 = self.conv1(x)
+        
+        x_cat = x.clone()
+        
+        for i in range(params.base - 1):
+
+            x_cat = torch.cat((x_cat, x), dim = 1)
+
+        x1 = self.prelu1(torch.add(x_cat, x1))
+        
+        x_down1 = self.down1(x1)
+        
+        # Downsampling layer 2
+        
+        x2_1 = self.conv2_1(self.drop(x_down1))
+        
+        x2_2 = self.conv2_2(x2_1)
+        
+        x2 = self.prelu2(torch.add(x_down1,x2_2))
+        
+        x_down2 = self.down2(x2)
+        
+        # Downsampling layer 3
+        
+        x3_1 = self.conv3_1(self.drop(x_down2))
+        
+        x3_2 = self.conv3_2(x3_1)
+        
+        x3_3 = self.conv3_3(x3_2)
+        
+        x3 = self.prelu3(torch.add(x_down2,x3_3))
+        
+        # Upsampling layer 2
+        
+        x_up2 = self.up2(x3)
+        
+        if x_up2.shape[2] != x2.shape[2]:
+        
+            x_up2 = self.pad(x_up2, x2.shape)
+        
+        x2 = self.Att2(g=x_up2,x=x2)
+        
+        x_up2_1 = self.conv2_1up(self.drop(self.cat(x2, x_up2)))
+        
+        x_up2_2 = self.conv2_2up(x_up2_1)
+        
+        x_up2 = self.prelu2up(torch.add(self.drop(x_up2), x_up2_2))
+        
+        # Upsampling layer 1
+        
+        x_up1 = self.up1(x_up2)
+        
+        if x_up1.shape[2] != x1.shape[2]:
+        
+            x_up1 = self.pad(x_up1, x1.shape)
+        
+        x1 = self.Att1(g = x_up1, x = x1)
+        
+        x_up1_1 = self.conv1_1up(self.drop(self.cat(x1, x_up1)))
+        
+        x_up1 = self.prelu1up(torch.add(self.drop(x_up1), x_up1_1))
+        
+        out = self.conv1_2up(x_up1)
+        
+        out = out.view(out.shape[0], out.shape[1], out.shape[-2], out.shape[-1], out.shape[2])
+        
+        return out
     
     
+    
+class RecurrentVNet(nn.Module):
+    
+    """
+    VNet from Milletari et al. 2016. Process time dimension as a third spatial dimension
+    
+    Include recurrent connections in the encoder-decoder skip connections, as in Payer et al. 2018
+    
+    """
+    
+    def __init__(self):
+        
+        super(RecurrentVNet, self).__init__()
+    
+        self.cat = Concat()
+
+        self.pad = addRowCol3d()
+
+        self.drop = nn.Dropout3d(p = 0.5)
+
+        # Decide on number of input channels
+
+        if 'both' in params.train_with:
+
+            in_chan = 2
+
+        else:
+
+            in_chan = 1
+
+        # Recommended convolutional parameters: base = 16, kernel = 5x5x5, padding = 2x2x2, stride = 1
+
+        # Downsampling layer 1
+
+        self.conv1 = conv3dnorm(in_chan, params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu1 = nn.PReLU(params.base*(2**(params.num_layers - 3)))
+        
+        self.down1 = conv3dnorm(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', False)
+        
+        # Downsampling layer 2
+
+        self.conv2_1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv2_2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu2 = nn.PReLU(params.base*(2**(params.num_layers - 2)))
+        
+        self.down2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), 2, 2, 0, 'prelu', False)
+        
+        # Downsampling layer 3
+        
+        self.conv3_1 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv3_2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv3_3 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu3 = nn.PReLU(params.base*(2**(params.num_layers - 1)))
+        
+        # Recurrent layers
+        
+        if params.rnn is not None:
+            
+            if params.rnn == 'LSTM':
+                
+                self.rnn2 = ConvLSTM(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), (params.kernel_size, params.kernel_size), 1, True, True, False)
+            
+                self.rnn1 = ConvLSTM(params.base*(2**(params.num_layers - 2)), int(params.base*(2**(params.num_layers - 2))), (params.kernel_size, params.kernel_size), 1, True, True, False)
+
+            elif params.rnn == 'GRU':
+
+                if torch.cuda.is_available():
+
+                    dtype = torch.cuda.FloatTensor # computation in GPU
+
+                else:
+
+                    dtype = torch.FloatTensor
+
+                self.rnn2 = ConvGRU(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
+
+                self.rnn1 = ConvGRU(params.base*(2**(params.num_layers - 2)), int(params.base*(2**(params.num_layers - 2))), (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
+            
+            else:
+
+                print('Wrong recurrent cell. Please type "LSTM" or "GRU" as possible names for a recurrent cell')
+            
+            
+            
+        else:
+            
+            print('A certain type of RNN should be specified, as "GRU" or "LSTM"')
+        
+        # Upsampling layer 2
+        
+        self.up2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', True)
+        
+        self.conv2_1up = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.conv2_2up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu2up = nn.PReLU(params.base*(2**(params.num_layers - 2)))
+       
+        # Upsampling layer 1
+        
+        self.up1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), 2, 2, 0, 'prelu', True)
+        
+        self.conv1_1up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
+        
+        self.prelu1up = nn.PReLU(params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_2up = conv3dnorm(params.base*(2**(params.num_layers - 3)), len(params.class_weights), 1, 1, 0, 'prelu', False)
+        
+        
+    def forward(self, x):
+        
+        # Tensor reshaping
+            
+        x = x.view(x.shape[0], x.shape[1], x.shape[-1], x.shape[2], x.shape[-2])
+        
+        # Downsampling layer 1
+
+        x1 = self.conv1(x)
+        
+        x_cat = x.clone()
+        
+        for i in range(params.base - 1):
+
+            x_cat = torch.cat((x_cat, x), dim = 1)
+
+        x1 = self.prelu1(torch.add(x_cat, x1))
+        
+        x_down1 = self.down1(x1)
+        
+        # Downsampling layer 2
+        
+        x2_1 = self.conv2_1(self.drop(x_down1))
+        
+        x2_2 = self.conv2_2(x2_1)
+        
+        x2 = self.prelu2(torch.add(x_down1,x2_2))
+        
+        x_down2 = self.down2(x2)
+        
+        # Downsampling layer 3
+        
+        x3_1 = self.conv3_1(self.drop(x_down2))
+        
+        x3_2 = self.conv3_2(x3_1)
+        
+        x3_3 = self.conv3_3(x3_2)
+        
+        x3 = self.prelu3(torch.add(x_down2,x3_3))
+        
+        # Upsampling layer 2
+        
+        x_up2 = self.up2(x3)
+        
+        if x_up2.shape[2] != x2.shape[2]:
+        
+            x_up2 = self.pad(x_up2, x2.shape)
+        
+        cat2 = self.drop(self.cat(x_up2, x2))
+        
+        cat2 = cat2.view(cat2.shape[0], cat2.shape[2], cat2.shape[1], cat2.shape[-2], cat2.shape[-1])
+        
+        x2, _ = self.rnn2(cat2)
+        
+        x2 = x2[0].view(x2[0].shape[0], x2[0].shape[2], x2[0].shape[1], x2[0].shape[-2], x2[0].shape[-1])
+        
+        x_up2_1 = self.conv2_1up(x2)
+        
+        x_up2_2 = self.conv2_2up(x_up2_1)
+        
+        x_up2 = self.prelu2up(torch.add(self.drop(x_up2), x_up2_2))
+        
+        # Upsampling layer 1
+        
+        x_up1 = self.up1(x_up2)
+        
+        if x_up1.shape[2] != x1.shape[2]:
+        
+            x_up1 = self.pad(x_up1, x1.shape)
+        
+        cat1 = self.drop(self.cat(x1, x_up1))
+        
+        cat1 = cat1.view(cat1.shape[0], cat1.shape[2], cat1.shape[1], cat1.shape[-2], cat1.shape[-1])
+        
+        x1, _ = self.rnn1(cat1)
+        
+        x1 = x1[0].view(x1[0].shape[0], x1[0].shape[2], x1[0].shape[1], x1[0].shape[-2], x1[0].shape[-1])
+        
+        x_up1_1 = self.conv1_1up(x1)
+        
+        x_up1 = self.prelu1up(torch.add(self.drop(x_up1), x_up1_1))
+        
+        out = self.conv1_2up(x_up1)
+        
+        out = out.view(out.shape[0], out.shape[1], out.shape[-2], out.shape[-1], out.shape[2])
+        
+        return out

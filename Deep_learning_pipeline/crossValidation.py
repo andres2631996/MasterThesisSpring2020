@@ -650,9 +650,9 @@ for k in range(K):
         
             net = models.NewAttentionUNet().cuda()
             
-    elif params.architecture == "FullyRUNet":
+    elif params.architecture == "AttentionVNet":
         
-            net = models.FullyRUNet().cuda()
+            net = models.AttentionVNet().cuda()
             
     elif params.architecture == "TimeDistributedAttentionUNet":
         
@@ -665,6 +665,10 @@ for k in range(K):
     elif params.architecture == "Hourglass":
         
         net = models.Hourglass().cuda()
+        
+    elif params.architecture == "RecurrentVNet":
+        
+        net = models.RecurrentVNet().cuda()
         
         # MORE MODELS TO COME!!!        
         #    elif params.arch_type == "VGG11":
