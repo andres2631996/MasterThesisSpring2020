@@ -375,6 +375,21 @@ class addRowCol(nn.Module):
         return final
     
     
+class addRowCol2d(nn.Module):
+    
+    def __init__(self):
+        
+        super(addRowCol2d, self).__init__()
+    
+    def forward(self, x, ref_shape):
+        
+        final = torch.zeros(ref_shape).cuda()
+        
+        final = F.interpolate(x, size=(ref_shape[-2], ref_shape[-1]), mode = 'bilinear', align_corners = False)
+        
+        return final
+    
+    
     
 class addRowCol3d(nn.Module):
     
@@ -1071,7 +1086,7 @@ class AttentionUNet(nn.Module):
 
         self.cat = Concat()
         
-        self.pad = addRowCol()
+        self.pad = addRowCol2d()
         
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
         
@@ -1154,18 +1169,19 @@ class AttentionUNet(nn.Module):
         
         d3 = self.Up3(x3)
         
-        if d3.shape[2] != x2.shape[2]:
+        if (d3.shape[-1] != x2.shape[-1]) or (d3.shape[-2] != x2.shape[-2]):
             
-            d3 = self.pad(d3)
+            d3 = self.pad(d3, x2.shape)
+            
         
         x2 = self.Att3(g=d3,x=x2)
         d3 = self.Up_conv3(self.cat(x2,d3), 'decoder')
 
         d2 = self.Up2(d3)
         
-        if d2.shape[2] != x1.shape[2]:
+        if d2.shape[-1] != x1.shape[-1] or (d3.shape[-2] != x2.shape[-2]):
             
-            d2 = self.pad(d2)
+            d2 = self.pad(d2, x1.shape)
         
         x1 = self.Att2(g=d2,x=x1)
         d2 = self.Up_conv2(self.cat(x1,d2), 'decoder')
@@ -1193,8 +1209,6 @@ class NewAttentionUNet(nn.Module):
         super(NewAttentionUNet, self).__init__()
 
         self.cat = Concat()
-        
-        self.pad = addRowCol()
         
         # Decide on number of input channels
         

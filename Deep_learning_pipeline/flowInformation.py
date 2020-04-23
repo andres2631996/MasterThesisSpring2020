@@ -411,11 +411,11 @@ class FlowInfo:
 
                             np.savetxt(filename_save, res)
                             
-                        #elif self.study == 'Hero' or self.study == 'Extr': # TO BE CHANGED
+                        elif self.study == 'Hero':
 
                             filename_save = self.path + mat_file[:-4].replace('msk_','') + '_flowInfo.txt'
 
-                            #np.savetxt(filename_save, res)
+                            np.savetxt(filename_save, res)
                             
                         elif self.study == 'Extr':
                             

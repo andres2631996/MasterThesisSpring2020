@@ -362,7 +362,97 @@ def focal_dice_loss(output, target):
     return focal_loss(output, target) + generalized_dice_loss(output, target)
 
 
+def center_loss(output, target):
+    
+    """
+    Computes center loss between network output and reference target
+    
+    Params:
+    
+        - output: network output
+        
+        - target: reference
+    
+    """
+    
+    target_array = target.cpu().numpy()
+    
+    output_softmax = F.softmax(output, dim=1)
+    
+    output_softmax = output_softmax[:,1].cpu().detach().numpy()
+    
+    out_coord = 0
+    
+    target_coord = 0
+    
+    for i in range(target.shape[0]):
+        
+        if len(target.shape) == 3:
+            
+            # 2D arrays
+            
+            x_t, y_t = np.meshgrid(np.arange(target.shape[-2]), np.arange(target.shape[-1]))
+            
+            x_o, y_o = np.meshgrid(np.arange(output_softmax.shape[-2]), np.arange(output_softmax.shape[-1]))
+            
+            x_out = np.sum((x_o*np.transpose(output_softmax[i,:,:])).flatten())
+            
+            y_out = np.sum((y_o*np.transpose(output_softmax[i,:,:])).flatten())
+            
+            out_coord += x_out + y_out
+            
+            x_tar = np.sum((x_t*np.transpose(target_array[i,:,:])).flatten())
+            
+            y_tar = np.sum((y_t*np.transpose(target_array[i,:,:])).flatten())
+            
+            target_coord += x_tar + y_tar
+            
+        elif len(target.shape) == 4:
+            
+            # 3D arrays
+            
+            x_t, y_t, z_t = np.meshgrid(np.arange(target.shape[-3]), np.arange(target.shape[-2]), np.arange(target.shape[-1]))
+            
+            x_o, y_o, z_o = np.meshgrid(np.arange(output_softmax.shape[-3]), np.arange(output_softmax.shape[-2]), np.arange(output_softmax.shape[-1]))
+            
+            x_out = np.sum((x_o*output_softmax[i,:,:,:]).flatten())
+            
+            y_out = np.sum((y_o*output_softmax[i,:,:,:]).flatten())
+            
+            z_out = np.sum((z_o*output_softmax[i,:,:,:]).flatten())
+            
+            out_coord += x_out + y_out + z_out
+            
+            x_tar = np.sum((x_t*target_array[i,:,:,:]).flatten())
+            
+            y_tar = np.sum((y_t*target_array[i,:,:,:]).flatten())
+            
+            z_tar = np.sum((z_t*target_array[i,:,:,:]).flatten())
+            
+            target_coord += x_tar + y_tar + z_tar
+            
+    return abs(target_coord - out_coord)
 
+
+def focal_center_loss(output, target):
+    
+    
+    """
+    Provide combined focal and center losses.
+    
+    Params:
+    
+        - output: network output
+        
+        - target: network ground truth
+    
+    """
+    
+    focal = focal_loss(output, target)
+    
+    center = center_loss(output, target)
+    
+    return focal + center*(10**(-3))
 
 
 def clear_GPU(net=None):

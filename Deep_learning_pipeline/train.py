@@ -176,10 +176,23 @@ def lossSelection(output, Y, i):
         loss = utilities.focal_dice_loss(output, Y.cuda(non_blocking=True))
         
         found = 1
+        
+    elif params.loss_fun == 'center':
+        
+        loss = utilities.center_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+        
+    elif params.loss_fun == 'focal_center':
+        
+        loss = utilities.focal_center_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+        
     
     else:
         
-        print('\nWrong loss. Please define a valid loss function (dice/generalized_dice/bce/dice_bce/exp_log/focal/tversky/focal_tversky)\n')
+        print('\nWrong loss. Please define a valid loss function (dice/generalized_dice/bce/dice_bce/exp_log/focal/tversky/focal_tversky/focal_dice/center/focal_center)\n')
 
         exit()
     

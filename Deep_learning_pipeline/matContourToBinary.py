@@ -384,17 +384,25 @@ class contour2mask:
         
         if final_mask.shape[0] != x_shape or final_mask.shape[1] != y_shape:
             
-            mask = self.zero_padding(mask, (x_shape, y_shape, gt_mag.shape[-1]))
+            if not('20181213' in self.filename):
             
-            gt_mag = self.zero_padding(gt_mag, (x_shape, y_shape, gt_mag.shape[-1]))
+                mask = self.zero_padding(mask, (x_shape, y_shape, gt_mag.shape[-1]))
+
+                gt_mag = self.zero_padding(gt_mag, (x_shape, y_shape, gt_mag.shape[-1]))
+                
+            else:
+                
+                mask = self.zero_padding(mask, (288, 288, gt_mag.shape[-1]))
+
+                gt_mag = self.zero_padding(gt_mag, (288, 288, gt_mag.shape[-1]))
             
         # Build final filename
         
-        if 'dx' in self.filename:
+        if 'dx' in self.filename or 'DX' in self.filename:
                 
             orient = 'dx'
         
-        elif 'si' in self.filename:
+        elif 'si' in self.filename or 'SI' in self.filename:
             
             orient = 'si'
             
@@ -416,31 +424,38 @@ class contour2mask:
                 rep = '_' + str(time)
 
                 final_filename = self.study + '_' + self.filename[:6] + '_' + self.filename[7:12] + orient + '_msk' + rep + '.vtk'
-
-                
-                mask_center = np.array(mask.shape)//2
  
                 self.array2vtk(mask, final_filename, self.dest_path, origin, spacing)
 
         
         elif self.study[0:-1] == 'Her':
             
-            if not('venc' in self.filename): 
+            #if not('venc' in self.filename): 
             
-                final_filename = self.filename[:-5] + 'msk' + self.filename[-6:-4] + '.vtk'
+            final_filename = self.filename.replace('.mat','.vtk')
             
-            else:
+            #else:
                 
-                final_filename = self.filename[:-13] + 'msk' + self.filename[-14:-3] + 'vtk'
+                #final_filename = self.filename[:-13] + 'msk' + self.filename[-14:-3] + 'vtk'
                 
-            #self.array2vtk(mask, final_filename, self.dest_path, origin, spacing)
+            self.array2vtk(mask, final_filename, self.dest_path, origin, spacing)
 
         
         elif self.study[0:-1] == 'Ext':
             
-            final_filename = self.filename[:-5] + 'msk' + self.filename[-6:-4] + '.vtk'
+            if '20181213' in self.filename:
+                
+                times = 2
+                
+            else:
+                
+                times = 1
             
-            #self.array2vtk(mask, final_filename, self.dest_path, origin, spacing)
+            for time in range(times):
+
+                final_filename = self.study + '_' + self.filename[:12] + '_' + orient + '_msk_' + str(time) + '.vtk'
+
+                self.array2vtk(mask, final_filename, self.dest_path, origin, spacing)
 
 
         # Saving as vtk files in specified location
@@ -451,20 +466,22 @@ class contour2mask:
           #  self.array2vtk(mask, final_filename, self.dest_path, origin, spacing)
         
         #else:
+        
+        #center = np.array(gt_mag.shape)//2
             
-            #plt.figure(figsize = (13,5))
-            
-            #plt.subplot(131)
-            
-            #plt.imshow(np.mean(gt_mag, axis = -1), cmap = 'gray'), plt.title(self.filename)
-            
-            #plt.subplot(132)
-            
-            #plt.imshow(np.mean(mask, axis = -1), cmap = 'gray')
-            
-            #plt.subplot(133)
-            
-            #plt.imshow(np.mean(gt_mag, axis = -1)*np.mean(mask, axis = -1), cmap = 'gray')
+        #plt.figure(figsize = (13,5))
+
+        #plt.subplot(131)
+
+        #plt.imshow(np.mean(gt_mag[center[0] - 32: center[0] + 32, center[1] - 32: center[1] + 32, :], axis = -1), cmap = 'gray'), plt.title(final_filename)
+
+        #plt.subplot(132)
+
+        #plt.imshow(np.mean(mask[center[0] - 32: center[0] + 32, center[1] - 32: center[1] + 32, :], axis = -1), cmap = 'gray')
+
+        #plt.subplot(133)
+
+        #plt.imshow(np.mean(gt_mag[center[0] - 32: center[0] + 32, center[1] - 32: center[1] + 32, :], axis = -1)*np.mean(mask[center[0] - 32: center[0] + 32, center[1] - 32: center[1] + 32, :], axis = -1), cmap = 'gray')
             
             #self.array2vtk(mask, self.filename.replace('mat','vtk'), self.dest_path, origin, spacing)
             

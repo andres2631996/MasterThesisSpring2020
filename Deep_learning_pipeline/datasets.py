@@ -123,16 +123,33 @@ class QFlowDataset(data.Dataset):
             
             - sum_t: array with sum_t image array (2D array)
 
-        """ 
+        """
+        
+        frame_ind = path.index('frame') 
+        
+        if not(params.multi_view) or (not('coronal' in path) and not('sagittal' in path)):
 
-        frame_ind = path.index('frame')           
-        
-        sum_path = path[:frame_ind] + 'sum.vtk' # Sum time image path
-        
-        mip_path = path[:frame_ind] + 'mip.vtk' # MIP image path
-        
+            sum_path = path[:frame_ind] + 'sum.vtk' # Sum time image path
+
+            mip_path = path[:frame_ind] + 'mip.vtk' # MIP image path
+   
+            
+        else:
+            
+            if 'coronal' in path:
+                
+                sum_path = path[:frame_ind] + 'coronal_sum.vtk'
+                
+                mip_path = path[:frame_ind] + 'coronal_mip.vtk'
+                
+            elif 'sagittal' in path:
+                
+                sum_path = path[:frame_ind] + 'sagittal_sum.vtk'
+                
+                mip_path = path[:frame_ind] + 'sagittal_mip.vtk'
+                
         sum_t, _, _ = self.readVTK(sum_path)
-        
+
         mip,_,_ = self.readVTK(mip_path)
         
         return sum_t[:,:,0], mip[:,:,0]
@@ -298,10 +315,13 @@ class QFlowDataset(data.Dataset):
             if not(params.three_D):
             
                 raw = raw[:,:,0]
+                
+                
     
             if params.add3d > 0:
             
                 raw = self.addNeighbors(raw_path, raw) # Surround central slice with past and future neighbors
+                    
             
             if not(params.three_D) and params.add3d == 0: # 2D VTK files only have one slice in T
                 
@@ -314,6 +334,9 @@ class QFlowDataset(data.Dataset):
             elif not(params.three_D) and params.add3d > 0:
                 
                 img = np.zeros((raw.shape[0], raw.shape[1], params.add3d*2 + 1,channels))
+                
+                
+                
             
             if not('both' in params.train_with):
                 

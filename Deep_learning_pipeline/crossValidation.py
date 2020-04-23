@@ -77,22 +77,42 @@ def preprocessingType(preprocessing):
     
     
     else:
+        
+        if not(params.multi_view):
 
-        if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
-    
-            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/'
-    
-        elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
+            if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
+
+                start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/'
+
+            elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
+
+                start_folder = '/home/andres/Documents/_Data/_Patients2D/_Prep/'
+
+            elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
+
+                start_folder = '/home/andres/Documents/_Data/_Patients2D/_Pre_crop/'
+
+            else:
+
+                print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
+                
+        else: 
             
-            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Prep/'
-        
-        elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
+            if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
+
+                start_folder = '/home/andres/Documents/_Data/_Patients_AllViews/_Raw/'
+
+            elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
+
+                start_folder = '/home/andres/Documents/_Data/_Patients_AllViews/_Prep/'
             
-            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Pre_crop/'
-        
-        else:
-            
-            print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
+            elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
+
+                start_folder = '/home/andres/Documents/_Data/_Patients_AllViews/_Pre_crop/'
+                
+            else:
+
+                print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
     
     return start_folder
 

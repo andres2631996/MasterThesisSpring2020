@@ -49,11 +49,13 @@ train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
-add3d = 2 # Number of past and future neighboring slices to build a 2.5D dataset
+add3d = 5 # Number of past and future neighboring slices to build a 2.5D dataset
 
 sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
+
+multi_view = False # If True, allow for a multi-view analysis along time
 
 
 # Augmentation parameters
@@ -80,11 +82,11 @@ k = 4 # Number of cross validation folds
 
 # Architecture parameters
 
-rnn = 'GRU' # Type of recurrent architecture to be integrated with U-Net
+rnn = None # Type of recurrent architecture to be integrated with U-Net
 
-rnn_position = 'encoder' # Part of the U-Net with recurrent modules (encoder/decoder/full)
+rnn_position = None # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'TimeDistributedAttentionUNet' # Architecture type
+architecture = 'AttentionVNet' # Architecture type
 
 #architecture = 'UNetRNN'
 
@@ -92,7 +94,7 @@ normalization = 'instance' # Normalization type to apply in networks (None/batch
 
 dropout = 0.5 # Dropout rate to apply in networks
 
-base = 64 # Number of features to extract in architecture, in the first layer
+base = 32 # Number of features to extract in architecture, in the first layer
 
 kernel_size = 3 # Kernel size for convolutional architecture
 
@@ -118,13 +120,21 @@ if three_D or (not(three_D) and add3d > 0):
     
 else:
     
-    if sum_work:
+    if sum_work and not(multi_view):
 
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dextra/' # Folder where to save data related to Deep Learning architecture # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
-
-    else:
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dextra/' # Folder where to save data related to Deep Learning architecture 
         
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/' # CHANGE IT AFTER TRAINING AGAIN WITH HEROIC!!!
+    elif sum_work and multi_view:
+        
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_multi_2Dextra/'
+
+    elif not(sum_work) and not(multi_view):
+        
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/' 
+        
+    elif not(sum_work) and multi_view:
+        
+        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_multi_2D/' 
         
         
 # Training parameters
@@ -151,7 +161,7 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 100000
+I = 50000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
@@ -177,7 +187,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, focal_dice, tversky, focal_tversky, exp_log, bce or bce_dice loss
+loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, focal_dice, tversky, focal_tversky, exp_log, center, focal_center, bce or bce_dice loss
 
 loss_beta = 0.3
 
