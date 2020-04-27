@@ -306,6 +306,8 @@ def evaluate(net, loader, iteration, key):
     
     with torch.no_grad():
         
+        params.test = True
+        
         net.eval()  # This is necessary for the dropout layers to work
 
         batch_gpu_max = params.batch_GPU_max_inference
@@ -468,6 +470,8 @@ def evaluate(net, loader, iteration, key):
     
     
     if key == 'val':
+        
+        params.test = False
         
         return results
     

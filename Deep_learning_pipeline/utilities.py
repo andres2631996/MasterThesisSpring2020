@@ -362,6 +362,28 @@ def focal_dice_loss(output, target):
     return focal_loss(output, target) + generalized_dice_loss(output, target)
 
 
+def focal_supervision_loss(output, target):
+    
+    """
+    Focal loss for deep supervision. It takes into account not only the output of the final model layer, but also from intermediate layers
+    
+    Params:
+    
+        - output: list of outputs ordered from last to first layer to be analyzed
+        
+        - target: ground-truth
+    
+    """
+    
+    loss = 0
+    
+    for i in range(len(output)):
+        
+        loss += focal_loss(output[i], target)
+        
+    return loss
+
+
 def center_loss(output, target):
     
     """

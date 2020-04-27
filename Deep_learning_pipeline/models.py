@@ -248,12 +248,12 @@ class Res_Up(nn.Module):
         if params.architecture == 'NewUNet_with_Residuals':
             
             self.conv1 = nn.ConvTranspose2d(in_chan, out_chan, kernel, stride = (1,1),\
-                    padding=padding, output_padding = 1)
+                    padding=padding)
             
         else:
 
             self.conv1 = nn.ConvTranspose2d(in_chan, out_chan, kernel + 1, stride = (2,2),\
-                    padding=padding, output_padding = 1)
+                    padding=padding)
         
         if params.normalization is not None:
         
@@ -462,7 +462,7 @@ class UNet_with_Residuals(nn.Module):
         #self.Rd4 = Res_Down(params.base*8, params.base*8, params.kernel_size, params.padding)
         
         self.fudge = nn.ConvTranspose2d(params.base*4, params.base*4, params.kernel_size, stride = (1,1),\
-                padding = params.padding)
+                padding = params.padding, output_padding = 1)
 
         
         #self.Ru3 = Res_Up(params.base*8, params.base*8, params.kernel_size, params.padding)
@@ -503,19 +503,18 @@ class UNet_with_Residuals(nn.Module):
         #d3 = self.Ru3(e4)
         d1 = self.Ru1(e2)
         
-        if d1.shape[2] != e1.shape[2]:
+        #if d1.shape[2] != e1.shape[2]:
             
-            e1 = self.pad(e1)
+         #   e1 = self.pad(e1)
         
         #d2 = self.Ru2(self.cat(d3[:,(params.base*4):],e3[:,(params.base*4):]))
         #d1 = self.Ru1(self.cat(d2[:,(params.base*2):],e2[:,(params.base*2):]))
         
-        #if d1.shape[2] != e1.shape[2]:
+        if d1.shape[2] != e1.shape[2]:
         
-            #e1 = self.pad(e1)
+            e1 = self.pad(e1)
             
         d0 = self.Ru0(self.cat(d1[:,params.base:],e1[:,params.base:]))
-        
         
         if d0.shape[2] != e0.shape[2]:
         
@@ -1069,7 +1068,7 @@ class Attention_block3d(nn.Module):
         return x*psi 
     
     
-    
+
 
 class AttentionUNet(nn.Module):
     
@@ -1146,6 +1145,17 @@ class AttentionUNet(nn.Module):
         self.Up_conv2 = conv_res_block(ch_in=params.base*(2**(params.num_layers - 2)), ch_out=params.base*(2**(params.num_layers - 3)), key = 'decoder')
 
         self.Conv_1x1 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1,  stride=1,padding=0)
+        
+        if params.supervision:
+            
+            self.Up_conv3_1 = nn.Conv2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), kernel_size=1,  stride=1,padding=0)
+            
+            self.Up_conv3_Transpose = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), len(params.class_weights), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+            
+            self.Up_conv2_1 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), kernel_size=1,  stride=1,padding=0)
+            
+            self.Up_conv2_Transpose = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), params.kernel_size, stride = 1, padding = params.padding, output_padding = 0)
+            
                            
                            
     def forward(self,x):
@@ -1175,7 +1185,7 @@ class AttentionUNet(nn.Module):
             
         
         x2 = self.Att3(g=d3,x=x2)
-        d3 = self.Up_conv3(self.cat(x2,d3), 'decoder')
+        d3 = self.Up_conv3(self.cat(x2,d3), 'decoder') # Output to supervision
 
         d2 = self.Up2(d3)
         
@@ -1184,15 +1194,31 @@ class AttentionUNet(nn.Module):
             d2 = self.pad(d2, x1.shape)
         
         x1 = self.Att2(g=d2,x=x1)
-        d2 = self.Up_conv2(self.cat(x1,d2), 'decoder')
+        d2 = self.Up_conv2(self.cat(x1,d2), 'decoder')  # Output to supervision
 
         d1 = self.Conv_1x1(d2)
         
         if params.three_D or (not(params.three_D) and params.add3d > 0):
             
             d1 = d1.view(params.batch_size, d1.shape[1], d1.shape[2], d1.shape[3], d1.shape[0]//params.batch_size)
+            
+        if params.supervision:
+            
+            d3 = self.Up_conv3_1(d3)
+            
+            d3 = self.Up_conv3_Transpose(d3)
+            
+            d2 = self.Up_conv2_1(d2)
+            
+            d2 = self.Up_conv2_Transpose(d2)
+            
+        if params.test or not(params.supervision):
 
-        return d1 
+            return d1 
+        
+        else:
+            
+            return [d1,d2,d3]
                            
                            
 class NewAttentionUNet(nn.Module):
@@ -1279,7 +1305,7 @@ class NewAttentionUNet(nn.Module):
         
         x3 = self.drop(self.Down3(x2, 'encoder'))
         
-        d3 = self.Up_conv3(x3)
+        d3 = self.Up_conv3(x3, 'decoder')
         
         x2 = self.Att3(g=d3,x=x2)
         
@@ -1296,287 +1322,6 @@ class NewAttentionUNet(nn.Module):
 
         return d1                            
 
-
-
-    
-    
-class UNetRNNDown(nn.Module):
-    
-    """
-    Encoder layers of U-Net with convLSTMs
-    
-    """
-    
-    def __init__(self, in_chan, out_chan):
-        
-        super(UNetRNNDown, self).__init__()
-        
-        if params.rnn == 'LSTM':
-
-            self.conv1 = ConvLSTM(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, True, True, False)
-            
-        elif params.rnn == 'GRU':
-            
-            if torch.cuda.is_available():
-                
-                dtype = torch.cuda.FloatTensor # computation in GPU
-                
-            else:
-                
-                dtype = torch.FloatTensor
-            
-            self.conv1 = ConvGRU(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
-            
-        else:
-             
-            print('Wrong recurrent cell introduced. Please introduce a valid name for recurrent cell')
-            
-            
-        
-        if params.normalization is not None:
-            
-            self.bn1 = EncoderNorm_2d(out_chan)
-            
-        #self.drop = nn.Dropout2d(params.dropout)
-
-        self.conv2 = nn.Conv2d(out_chan, out_chan, params.kernel_size + 1, stride = (2,2), padding = params.padding)
-        
-        if params.normalization is not None:
-            
-            self.bn2 = EncoderNorm_2d(out_chan)
-
-
-    def forward(self, x):
-        
-        # Reshape x to enter the convLSTM cell: (BxT,C,H,W) --> (B,T,C,H,W)
-        
-        x = x.view(params.batch_size, x.shape[0]//params.batch_size, x.shape[-3], x.shape[-2], x.shape[-1])
-        
-        # Introduce x into convLSTM
-        
-        x,_ = list(self.conv1(x))
-        
-        # Reshape x again to original shape
-        
-        x = x[0].view(x[0].shape[0]*x[0].shape[1],x[0].shape[-3], x[0].shape[-2], x[0].shape[-1])
-        
-        if params.normalization is not None:
-        
-            x = self.bn2(self.conv2(F.leaky_relu(self.bn1(x))))
-            
-        else:
-            
-            x = self.conv2(F.leaky_relu(x))
-
-        return F.leaky_relu(x)
-    
-    
-class UNetRNNUp(nn.Module):
-    
-    """
-    Decoder layers of U-Net with convLSTMs or convGRUs
-    
-    """
-    
-    def __init__(self, in_chan, out_chan):
-        
-        super(UNetRNNUp, self).__init__()
-        
-        if params.rnn == 'LSTM':
-
-            self.conv1 = ConvLSTM(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, True, True, False)
-            
-        elif params.rnn == 'GRU':
-            
-            if torch.cuda.is_available():
-                
-                dtype = torch.cuda.FloatTensor # computation in GPU
-                
-            else:
-                
-                dtype = torch.FloatTensor
-            
-            self.conv1 = ConvGRU(in_chan, out_chan, (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
-            
-        else:
-             
-            print('Wrong recurrent cell introduced. Please introduce a valid name for recurrent cell')
-        
-        if params.normalization is not None:
-            
-            self.bn1 = EncoderNorm_2d(out_chan)
-            
-        #self.drop = nn.Dropout2d(params.dropout)
-
-        self.conv2 = nn.ConvTranspose2d(out_chan, out_chan, params.kernel_size + 1, stride = (2,2), padding=(1,1))
-        
-        if params.normalization is not None:
-            
-            self.bn2 = EncoderNorm_2d(out_chan)
-
-
-    def forward(self, x):
-        
-        # Reshape x to enter the convLSTM cell: (BxT,C,H,W) --> (B,T,C,H,W)
-        
-        x = x.view(params.batch_size, x.shape[0]//params.batch_size, x.shape[-3], x.shape[-2], x.shape[-1])
-        
-        # Introduce x into convLSTM
-        
-        x,_ = list(self.conv1(x))
-        
-        # Reshape x again to original shape
-        
-        x = x[0].view(x[0].shape[0]*x[0].shape[1],x[0].shape[-3], x[0].shape[-2], x[0].shape[-1])
-        
-        if params.normalization is not None:
-        
-            x = self.bn2(self.conv2(F.leaky_relu(self.bn1(x))))
-
-            
-        else:
-            
-            x = self.conv2(F.leaky_relu(x))
-
-        return F.leaky_relu(x)
-    
-    
-    
-class UNetRNN(nn.Module):
-    
-    """
-    U-Net with convLSTM or convGRU operators, to process 2D+time information
-    
-    """
-    
-    
-    def __init__(self):
-        
-        super(UNetRNN, self).__init__()
-        
-        self.cat = Concat()
-        
-        self.pad = addRowCol()
-        
-        if 'both' in params.train_with:
-            
-            channels = 2
-            
-        else:
-            
-            channels = 1
-        
-        self.conv1 = nn.Conv2d(channels, params.base, params.kernel_size, padding=params.padding)
-        
-        if params.normalization is not None:
-                    
-            self.bn1 = EncoderNorm_2d(params.base)
-
-        self.drop = nn.Dropout2d(params.dropout)
-
-        self.conv2 = nn.Conv2d(params.base, params.base, params.kernel_size, padding=params.padding)
-        
-        if params.normalization is not None:
-        
-            self.bn2 = EncoderNorm_2d(params.base)
-            
-        if params.rnn_position == 'encoder' or params.rnn_position == 'full': 
-            
-            self.Rd1 = UNetRNNDown(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)))
-
-            self.Rd2 = UNetRNNDown(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)))
-
-            self.Rd3 = UNetRNNDown(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
-            
-        else:
-            
-            self.Rd1 = Res_Down(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
-            self.Rd2 = Res_Down(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
-            self.Rd3 = Res_Down(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
-            
-        
-        
-        if params.rnn_position == 'decoder' or params.rnn_position == 'full':
-            
-            self.Ru3 = UNetRNNUp(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
-
-            self.Ru2 = UNetRNNUp(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)))
-
-            self.Ru1 = UNetRNNUp(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)))
-            
-        else:
-                
-            self.Ru3 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, params.padding)
-
-            self.Ru2 = Res_Up(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, params.padding)
-
-            self.Ru1 = Res_Up(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.kernel_size, params.padding)
-                
-        self.Rf = Res_Final(params.base, len(params.class_weights), params.kernel_size, params.padding)
-        
-        
-    def forward(self, x):
-        
-        # Reshape input: (B, C, H, W, T) --> (B*T, C, H, W)
-        
-        x = x.view(x.shape[0]*x.shape[-1], x.shape[1], x.shape[-3], x.shape[-2])
-        
-        # First convolutional layer
-        
-        if params.normalization is not None:
-        
-            out = F.relu(self.bn1(self.conv1(x)))
-
-            e0 = F.relu(self.bn2(self.conv2(out)))
-            
-        else:
-        
-            out = F.relu(self.conv1(x))
-
-            e0 = F.relu(self.conv2(out))
-            
-        # Encoder layers: convRNN + conv2D
-
-        e1 = self.Rd1(e0)
-        
-        e2 = self.drop(self.Rd2(e1))
-        
-        e3 = self.drop(self.Rd3(e2))
-    
-        # Decoder layers: conv2Dtranspose + conv2d
-        
-        d3 = self.Ru3(e3)
-
-        if d3.shape[2] != e2.shape[2]:
-                    
-            e2 = self.pad(e2)
-                
-        d2 = self.Ru2(self.cat(d3[:,(params.base*(2**(params.num_layers - 2))):],e2[:,(params.base*(2**(params.num_layers - 2))):]))
-        
-        if d2.shape[2] != e1.shape[2]:
-            
-            e1 = self.pad(e1)
-            
-        d1 = self.Ru1(self.cat(d2[:,(params.base*(2**(params.num_layers - 3))):],e1[:,(params.base*(2**(params.num_layers - 3))):]))
-                
-        # Final output layer
-        
-        if d1.shape[2] != e0.shape[2]:
-        
-            e0 = self.pad(e0)
-
-        out = self.Rf(self.cat(e0[:,(params.base//2):],d1[:,(params.base//2):]))
-        
-        # Reshape output to original dimensions for loss function computation with respect to corresponding mask
-        
-        out = out.view(params.batch_size, out.shape[1], out.shape[2], out.shape[3], out.shape[0]//params.batch_size)
-
-        
-        return out
-    
- 
-    
-    
     
 class TimeDistributedAttentionUNet(nn.Module):
     
@@ -1635,6 +1380,16 @@ class TimeDistributedAttentionUNet(nn.Module):
         self.Up_conv2 = conv_res_blockTD(ch_in=params.base*(2**(params.num_layers - 2)), ch_out=params.base*(2**(params.num_layers - 3)), key = 'decoder')
 
         self.Conv_1x1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+        
+        if params.supervision:
+            
+            self.Up_conv3_1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), kernel_size=1,  stride=1,padding=0))
+            
+            self.Up_conv3_Transpose = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), len(params.class_weights), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+            
+            self.Up_conv2_1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), kernel_size=1,  stride=1,padding=0))
+            
+            self.Up_conv2_Transpose = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), params.kernel_size, stride = 1, padding = params.padding, output_padding = 0))
                            
                            
     def forward(self,x):
@@ -1679,8 +1434,31 @@ class TimeDistributedAttentionUNet(nn.Module):
         # Reshape output: (BTCHW) --> (BCHWT)
             
         d1 = d1.view(params.batch_size, d1.shape[2], d1.shape[3], d1.shape[4], d1.shape[1])
+        
+        if params.supervision:
+            
+            d3 = self.Up_conv3_1(d3)
+            
+            d3 = self.Up_conv3_Transpose(d3)
+            
+            d2 = self.Up_conv2_1(d2)
+            
+            d2 = self.Up_conv2_Transpose(d2)
+            
+            d3 = d3.view(params.batch_size, d3.shape[2], d3.shape[3], d3.shape[4], d3.shape[1])
+            
+            d2 = d2.view(params.batch_size, d2.shape[2], d2.shape[3], d2.shape[4], d2.shape[1])
 
-        return d1 
+            
+            
+        if params.test or not(params.supervision):
+
+            return d1 
+        
+        else:
+            
+            return [d1,d2,d3]
+
                        
 
         
@@ -1763,6 +1541,16 @@ class TimeDistributedUNet(nn.Module):
         self.Up_conv2 = conv_res_blockTD(ch_in=params.base*(2**(params.num_layers - 2)), ch_out=params.base*(2**(params.num_layers - 3)), key = 'decoder')
 
         self.Conv_1x1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+        
+        if params.supervision:
+            
+            self.Up_conv3_1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), kernel_size=1,  stride=1,padding=0))
+            
+            self.Up_conv3_Transpose = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), len(params.class_weights), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+            
+            self.Up_conv2_1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), kernel_size=1,  stride=1,padding=0))
+            
+            self.Up_conv2_Transpose = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), params.kernel_size, stride = 1, padding = params.padding, output_padding = 0))
                            
                            
     def forward(self,x):
@@ -1813,8 +1601,30 @@ class TimeDistributedUNet(nn.Module):
         # Reshape output: (BTCHW) --> (BCHWT)
             
         d1 = d1.view(params.batch_size, d1.shape[2], d1.shape[3], d1.shape[4], d1.shape[1])
+        
+        if params.supervision:
+            
+            d3 = self.Up_conv3_1(d3)
+            
+            d3 = self.Up_conv3_Transpose(d3)
+            
+            d2 = self.Up_conv2_1(d2)
+            
+            d2 = self.Up_conv2_Transpose(d2)
+            
+            d3 = d3.view(params.batch_size, d3.shape[2], d3.shape[3], d3.shape[4], d3.shape[1])
+            
+            d2 = d2.view(params.batch_size, d2.shape[2], d2.shape[3], d2.shape[4], d2.shape[1])
+            
+            
+        if params.test or not(params.supervision):
 
-        return d1
+            return d1 
+        
+        else:
+            
+            return [d1,d2,d3]
+
     
 
     
@@ -1864,6 +1674,8 @@ class conv_res_blockTD_nonrec(nn.Module):
         x2 = self.relu2(self.bn2(self.conv2(x1)))
         
         return x0 + x2
+    
+    
                        
 
 class Hourglass(nn.Module):
@@ -1945,6 +1757,16 @@ class Hourglass(nn.Module):
         self.Up_conv2 = conv_res_blockTD_nonrec(ch_in=params.base*(2**(params.num_layers - 2)), ch_out=params.base*(2**(params.num_layers - 3)))
 
         self.Conv_1x1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+        
+        if params.supervision:
+            
+            self.Up_conv3_1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), kernel_size=1,  stride=1,padding=0))
+            
+            self.Up_conv3_Transpose = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), len(params.class_weights), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+            
+            self.Up_conv2_1 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), kernel_size=1,  stride=1,padding=0))
+            
+            self.Up_conv2_Transpose = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), params.kernel_size, stride = 1, padding = params.padding, output_padding = 0))
                            
                            
     def forward(self,x):
@@ -1988,435 +1810,161 @@ class Hourglass(nn.Module):
             
         d1 = d1.view(params.batch_size, d1.shape[2], d1.shape[3], d1.shape[4], d1.shape[1])
 
-        return d1 
+        if params.supervision:
+            
+            d3 = self.Up_conv3_1(d3)
+            
+            d3 = self.Up_conv3_Transpose(d3)
+            
+            d2 = self.Up_conv2_1(d2)
+            
+            d2 = self.Up_conv2_Transpose(d2)
+            
+            d3 = d3.view(params.batch_size, d3.shape[2], d3.shape[3], d3.shape[4], d3.shape[1])
+            
+            d2 = d2.view(params.batch_size, d2.shape[2], d2.shape[3], d2.shape[4], d2.shape[1])
+            
+            
+        if params.test or not(params.supervision):
+
+            return d1 
+        
+        else:
+            
+            return [d1,d2,d3]
                            
 
-class conv3dnorm(nn.Module):
-    
-    """
-    Provide a 3D convolution followed by a normalization and a PReLU
-    
-    Params:
-    
-        - in_chan: input number of channels
-        
-        - out_chan: output number of channels
-        
-        - kernel: kernel size
-        
-        - stride: stride
-        
-        - padding: padding
-        
-        - activation: activation function to use ('prelu', 'relu' or 'elu')
-        
-        - transpose: flag indicating if the convolution is transpose or not (for upsampling)
-    
-    """
-    
-    def __init__(self, in_chan, out_chan, kernel, stride, padding, activation, transpose):
-        
-        super(conv3dnorm, self).__init__()
-        
-        if transpose:
-            
-            self.conv = nn.ConvTranspose3d(in_chan, out_chan, kernel, stride, padding)
-            
-        else:
-        
-            self.conv = nn.Conv3d(in_chan, out_chan, kernel, stride, padding)
-        
-        self.norm = nn.InstanceNorm3d(out_chan)
-        
-        if activation == 'prelu':
-        
-            self.activ = nn.PReLU(out_chan)
-            
-        elif activation == 'relu':
-            
-            self.activ = nn.ReLU()
-            
-        elif activation == 'elu':
-            
-            self.activ = nn.ELU()
-            
-        else:
-            
-            print('Unrecognized activation function. Please provide a valid key for activation: "elu", "prelu" or "relu"')
-            
-        
-    def forward(self,x):    
-        
-        conv = self.conv(x)
-        
-        norm_conv = self.norm(conv)
-        
-        act_norm_conv = self.activ(norm_conv)
-        
-        return act_norm_conv
-    
-        
-    
-class AttentionVNet(nn.Module):
-    
-    """
-    VNet from Milletari et al. 2016. Process time dimension as a third spatial dimension
-    
-    Include attention gates from Oktay et al. 2018
-    
-    """
-    
-    def __init__(self):
-        
-        super(AttentionVNet, self).__init__()
-    
-        self.cat = Concat()
 
-        self.pad = addRowCol3d()
+class convBlock2d(nn.Module):
+    
+    def __init__(self, in_channels, middle_channels, out_channels):
+        
+        super(convBlock2d, self).__init__()
+        
+        self.relu = nn.ReLU(inplace=True)
+        
+        self.conv1 = nn.Conv2d(in_channels, middle_channels, 3, padding=1)
+        
+        self.bn1 = nn.InstanceNorm2d(middle_channels)
+        
+        self.conv2 = nn.Conv2d(middle_channels, out_channels, 3, padding=1)
+        
+        self.bn2 = nn.InstanceNorm2d(out_channels)
+        
 
-        self.drop = nn.Dropout3d(p = 0.5)
-
-        # Decide on number of input channels
-
-        if 'both' in params.train_with:
-
-            in_chan = 2
-
-        else:
-
-            in_chan = 1
-
-        # Recommended convolutional parameters: base = 16, kernel = 5x5x5, padding = 2x2x2, stride = 1
-
-        # Downsampling layer 1
-
-        self.conv1 = conv3dnorm(in_chan, params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu1 = nn.PReLU(params.base*(2**(params.num_layers - 3)))
-        
-        self.down1 = conv3dnorm(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', False)
-        
-        # Downsampling layer 2
-
-        self.conv2_1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv2_2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu2 = nn.PReLU(params.base*(2**(params.num_layers - 2)))
-        
-        self.down2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), 2, 2, 0, 'prelu', False)
-        
-        # Downsampling layer 3
-        
-        self.conv3_1 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv3_2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv3_3 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu3 = nn.PReLU(params.base*(2**(params.num_layers - 1)))
-        
-        # Upsampling layer 2
-        
-        self.up2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', True)
-        
-        self.Att2 = Attention_block3d(F_g=params.base*(2**(params.num_layers - 2)),F_l=params.base*(2**(params.num_layers - 2)),F_int=params.base*(2**(params.num_layers - 3)))
-        
-        self.conv2_1up = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv2_2up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu2up = nn.PReLU(params.base*(2**(params.num_layers - 2)))
-       
-        # Upsampling layer 1
-        
-        self.up1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), 2, 2, 0, 'prelu', True)
-        
-        self.Att1 = Attention_block3d(F_g=params.base*(2**(params.num_layers - 3)),F_l= params.base*(2**(params.num_layers - 3)),F_int=int(params.base*(2**(params.num_layers - 4))))
-        
-        self.conv1_1up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu1up = nn.PReLU(params.base*(2**(params.num_layers - 3)))
-        
-        self.conv1_2up = conv3dnorm(params.base*(2**(params.num_layers - 3)), len(params.class_weights), 1, 1, 0, 'prelu', False)
-        
-        
     def forward(self, x):
         
-        # Tensor reshaping
-            
-        x = x.view(x.shape[0], x.shape[1], x.shape[-1], x.shape[2], x.shape[-2])
+        out = self.conv1(x)
         
-        # Downsampling layer 1
+        out = self.bn1(out)
+        
+        out = self.relu(out)
 
-        x1 = self.conv1(x)
+        out = self.conv2(out)
         
-        x_cat = x.clone()
+        out = self.bn2(out)
         
-        for i in range(params.base - 1):
+        out = self.relu(out)
 
-            x_cat = torch.cat((x_cat, x), dim = 1)
-
-        x1 = self.prelu1(torch.add(x_cat, x1))
-        
-        x_down1 = self.down1(x1)
-        
-        # Downsampling layer 2
-        
-        x2_1 = self.conv2_1(self.drop(x_down1))
-        
-        x2_2 = self.conv2_2(x2_1)
-        
-        x2 = self.prelu2(torch.add(x_down1,x2_2))
-        
-        x_down2 = self.down2(x2)
-        
-        # Downsampling layer 3
-        
-        x3_1 = self.conv3_1(self.drop(x_down2))
-        
-        x3_2 = self.conv3_2(x3_1)
-        
-        x3_3 = self.conv3_3(x3_2)
-        
-        x3 = self.prelu3(torch.add(x_down2,x3_3))
-        
-        # Upsampling layer 2
-        
-        x_up2 = self.up2(x3)
-        
-        if x_up2.shape[2] != x2.shape[2]:
-        
-            x_up2 = self.pad(x_up2, x2.shape)
-        
-        x2 = self.Att2(g=x_up2,x=x2)
-        
-        x_up2_1 = self.conv2_1up(self.drop(self.cat(x2, x_up2)))
-        
-        x_up2_2 = self.conv2_2up(x_up2_1)
-        
-        x_up2 = self.prelu2up(torch.add(self.drop(x_up2), x_up2_2))
-        
-        # Upsampling layer 1
-        
-        x_up1 = self.up1(x_up2)
-        
-        if x_up1.shape[2] != x1.shape[2]:
-        
-            x_up1 = self.pad(x_up1, x1.shape)
-        
-        x1 = self.Att1(g = x_up1, x = x1)
-        
-        x_up1_1 = self.conv1_1up(self.drop(self.cat(x1, x_up1)))
-        
-        x_up1 = self.prelu1up(torch.add(self.drop(x_up1), x_up1_1))
-        
-        out = self.conv1_2up(x_up1)
-        
-        out = out.view(out.shape[0], out.shape[1], out.shape[-2], out.shape[-1], out.shape[2])
-        
         return out
     
     
-    
-class RecurrentVNet(nn.Module):
-    
-    """
-    VNet from Milletari et al. 2016. Process time dimension as a third spatial dimension
-    
-    Include recurrent connections in the encoder-decoder skip connections, as in Payer et al. 2018
-    
-    """
+class NestedUNet2d(nn.Module):
     
     def __init__(self):
-        
-        super(RecurrentVNet, self).__init__()
     
-        self.cat = Concat()
-
-        self.pad = addRowCol3d()
-
-        self.drop = nn.Dropout3d(p = 0.5)
-
-        # Decide on number of input channels
-
-        if 'both' in params.train_with:
-
-            in_chan = 2
-
-        else:
-
-            in_chan = 1
-
-        # Recommended convolutional parameters: base = 16, kernel = 5x5x5, padding = 2x2x2, stride = 1
-
-        # Downsampling layer 1
-
-        self.conv1 = conv3dnorm(in_chan, params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
+        super(NestedUNet2d, self).__init__()
         
-        self.prelu1 = nn.PReLU(params.base*(2**(params.num_layers - 3)))
+        self.pool = nn.MaxPool2d(2, 2)
         
-        self.down1 = conv3dnorm(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', False)
+        # Provide number of input channels
         
-        # Downsampling layer 2
+        if params.sum_work and 'both' in params.train_with:
 
-        self.conv2_1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv2_2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu2 = nn.PReLU(params.base*(2**(params.num_layers - 2)))
-        
-        self.down2 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), 2, 2, 0, 'prelu', False)
-        
-        # Downsampling layer 3
-        
-        self.conv3_1 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv3_2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv3_3 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu3 = nn.PReLU(params.base*(2**(params.num_layers - 1)))
-        
-        # Recurrent layers
-        
-        if params.rnn is not None:
-            
-            if params.rnn == 'LSTM':
-                
-                self.rnn2 = ConvLSTM(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), (params.kernel_size, params.kernel_size), 1, True, True, False)
-            
-                self.rnn1 = ConvLSTM(params.base*(2**(params.num_layers - 2)), int(params.base*(2**(params.num_layers - 2))), (params.kernel_size, params.kernel_size), 1, True, True, False)
+            in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
 
-            elif params.rnn == 'GRU':
+        elif (params.sum_work and not('both' in params.train_with)):
 
-                if torch.cuda.is_available():
+            in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
 
-                    dtype = torch.cuda.FloatTensor # computation in GPU
+        elif (not(params.sum_work) and 'both' in params.train_with):
 
-                else:
+            in_chan = 2 # Train with magnitude + phase (no sum)
 
-                    dtype = torch.FloatTensor
+        elif not(params.sum_work) and not('both' in params.train_with):
 
-                self.rnn2 = ConvGRU(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
-
-                self.rnn1 = ConvGRU(params.base*(2**(params.num_layers - 2)), int(params.base*(2**(params.num_layers - 2))), (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
-            
-            else:
-
-                print('Wrong recurrent cell. Please type "LSTM" or "GRU" as possible names for a recurrent cell')
+            in_chan = 1 # Train magnitude or phase (no sum)
             
             
+        
+        self.conv0_0 = convBlock2d(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_0 = convBlock2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        self.conv2_0 = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
+        
+        
+        
+        self.conv0_1 = convBlock2d(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_1 = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        
+        self.conv0_2 = convBlock2d(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_2 = convBlock2d(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2))) 
+        
+        self.conv0_3 = convBlock2d(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        
+        self.up10_01 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 1, padding = params.padding)
+        
+        self.up11_02 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 1, padding = params.padding)
+        
+        self.up12_03 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 1, padding = params.padding)
+        
+        self.up20_12 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 1, padding = params.padding)
+        
+        self.Conv_1x1_03 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+        
+        if params.supervision:
             
-        else:
+            self.Conv_1x1_02 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
             
-            print('A certain type of RNN should be specified, as "GRU" or "LSTM"')
+            self.Conv_1x1_01 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+
+            
         
-        # Upsampling layer 2
-        
-        self.up2 = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), 2, 2, 0, 'prelu', True)
-        
-        self.conv2_1up = conv3dnorm(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.conv2_2up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu2up = nn.PReLU(params.base*(2**(params.num_layers - 2)))
-       
-        # Upsampling layer 1
-        
-        self.up1 = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), 2, 2, 0, 'prelu', True)
-        
-        self.conv1_1up = conv3dnorm(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.kernel_size, 1, params.padding, 'prelu', False)
-        
-        self.prelu1up = nn.PReLU(params.base*(2**(params.num_layers - 3)))
-        
-        self.conv1_2up = conv3dnorm(params.base*(2**(params.num_layers - 3)), len(params.class_weights), 1, 1, 0, 'prelu', False)
-        
-        
+            
     def forward(self, x):
         
-        # Tensor reshaping
+        x_00 = self.conv0_0(x)
+        
+        x_10 = self.conv1_0(x_00)
+        
+        x_20 = self.conv2_0(x_10)
+        
+        x_01 = self.conv0_1(torch.cat((self.up10_01(x_10),x_00), dim = 1))
+        
+        x_11 = self.conv1_1(x_10)
+        
+        x_02 = self.conv0_2(torch.cat((self.up11_02(x_11), x_00, x_01),dim = 1))
+        
+        x_12 = self.conv1_2(torch.cat((self.up20_12(x_20), x_10, x_11),dim = 1))
+        
+        x_03 = self.conv0_3(torch.cat((self.up12_03(x_12), x_00, x_01, x_02), dim = 1))
+        
+        x_03 = self.Conv_1x1_03(x_03)
+        
+        if params.supervision and not(params.test):
             
-        x = x.view(x.shape[0], x.shape[1], x.shape[-1], x.shape[2], x.shape[-2])
+            x_01 = self.Conv_1x1_01(x_01) 
+            
+            x_02 = self.Conv_1x1_01(x_02)
+            
+            return [x_03, x_02, x_01]
         
-        # Downsampling layer 1
-
-        x1 = self.conv1(x)
+        else:
+            
+            return x_03
         
-        x_cat = x.clone()
-        
-        for i in range(params.base - 1):
-
-            x_cat = torch.cat((x_cat, x), dim = 1)
-
-        x1 = self.prelu1(torch.add(x_cat, x1))
-        
-        x_down1 = self.down1(x1)
-        
-        # Downsampling layer 2
-        
-        x2_1 = self.conv2_1(self.drop(x_down1))
-        
-        x2_2 = self.conv2_2(x2_1)
-        
-        x2 = self.prelu2(torch.add(x_down1,x2_2))
-        
-        x_down2 = self.down2(x2)
-        
-        # Downsampling layer 3
-        
-        x3_1 = self.conv3_1(self.drop(x_down2))
-        
-        x3_2 = self.conv3_2(x3_1)
-        
-        x3_3 = self.conv3_3(x3_2)
-        
-        x3 = self.prelu3(torch.add(x_down2,x3_3))
-        
-        # Upsampling layer 2
-        
-        x_up2 = self.up2(x3)
-        
-        if x_up2.shape[2] != x2.shape[2]:
-        
-            x_up2 = self.pad(x_up2, x2.shape)
-        
-        cat2 = self.drop(self.cat(x_up2, x2))
-        
-        cat2 = cat2.view(cat2.shape[0], cat2.shape[2], cat2.shape[1], cat2.shape[-2], cat2.shape[-1])
-        
-        x2, _ = self.rnn2(cat2)
-        
-        x2 = x2[0].view(x2[0].shape[0], x2[0].shape[2], x2[0].shape[1], x2[0].shape[-2], x2[0].shape[-1])
-        
-        x_up2_1 = self.conv2_1up(x2)
-        
-        x_up2_2 = self.conv2_2up(x_up2_1)
-        
-        x_up2 = self.prelu2up(torch.add(self.drop(x_up2), x_up2_2))
-        
-        # Upsampling layer 1
-        
-        x_up1 = self.up1(x_up2)
-        
-        if x_up1.shape[2] != x1.shape[2]:
-        
-            x_up1 = self.pad(x_up1, x1.shape)
-        
-        cat1 = self.drop(self.cat(x1, x_up1))
-        
-        cat1 = cat1.view(cat1.shape[0], cat1.shape[2], cat1.shape[1], cat1.shape[-2], cat1.shape[-1])
-        
-        x1, _ = self.rnn1(cat1)
-        
-        x1 = x1[0].view(x1[0].shape[0], x1[0].shape[2], x1[0].shape[1], x1[0].shape[-2], x1[0].shape[-1])
-        
-        x_up1_1 = self.conv1_1up(x1)
-        
-        x_up1 = self.prelu1up(torch.add(self.drop(x_up1), x_up1_1))
-        
-        out = self.conv1_2up(x_up1)
-        
-        out = out.view(out.shape[0], out.shape[1], out.shape[-2], out.shape[-1], out.shape[2])
-        
-        return out

@@ -77,42 +77,23 @@ def preprocessingType(preprocessing):
     
     
     else:
-        
-        if not(params.multi_view):
 
-            if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
 
-                start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/'
+        if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
 
-            elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/'
 
-                start_folder = '/home/andres/Documents/_Data/_Patients2D/_Prep/'
+        elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
 
-            elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Prep/'
 
-                start_folder = '/home/andres/Documents/_Data/_Patients2D/_Pre_crop/'
+        elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
 
-            else:
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Pre_crop/'
 
-                print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
-                
-        else: 
-            
-            if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
+        else:
 
-                start_folder = '/home/andres/Documents/_Data/_Patients_AllViews/_Raw/'
-
-            elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
-
-                start_folder = '/home/andres/Documents/_Data/_Patients_AllViews/_Prep/'
-            
-            elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
-
-                start_folder = '/home/andres/Documents/_Data/_Patients_AllViews/_Pre_crop/'
-                
-            else:
-
-                print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
+            print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
     
     return start_folder
 
@@ -670,10 +651,6 @@ for k in range(K):
         
             net = models.NewAttentionUNet().cuda()
             
-    elif params.architecture == "AttentionVNet":
-        
-            net = models.AttentionVNet().cuda()
-            
     elif params.architecture == "TimeDistributedAttentionUNet":
         
         net = models.TimeDistributedAttentionUNet().cuda()
@@ -686,9 +663,9 @@ for k in range(K):
         
         net = models.Hourglass().cuda()
         
-    elif params.architecture == "RecurrentVNet":
+    elif params.architecture == "NestedUNet2d":
         
-        net = models.RecurrentVNet().cuda()
+        net = models.NestedUNet2d().cuda()
         
         # MORE MODELS TO COME!!!        
         #    elif params.arch_type == "VGG11":

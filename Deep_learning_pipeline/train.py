@@ -189,6 +189,12 @@ def lossSelection(output, Y, i):
         
         found = 1
         
+    elif params.loss_fun == 'focal_supervision':
+        
+        loss = utilities.focal_supervision_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+        
     
     else:
         

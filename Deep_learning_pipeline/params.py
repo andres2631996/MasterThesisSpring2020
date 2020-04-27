@@ -49,13 +49,17 @@ train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
-add3d = 5 # Number of past and future neighboring slices to build a 2.5D dataset
+add3d = 0 # Number of past and future neighboring slices to build a 2.5D dataset
 
-sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
+sum_work = True # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
 
 multi_view = False # If True, allow for a multi-view analysis along time
+
+supervision = True # If True, perform deep supervision on given architecture
+
+test = False # State if model is being trained (False) or tested/validated (True)
 
 
 # Augmentation parameters
@@ -86,7 +90,7 @@ rnn = None # Type of recurrent architecture to be integrated with U-Net
 
 rnn_position = None # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'AttentionVNet' # Architecture type
+architecture = 'NestedUNet2d' # Architecture type
 
 #architecture = 'UNetRNN'
 
@@ -94,7 +98,7 @@ normalization = 'instance' # Normalization type to apply in networks (None/batch
 
 dropout = 0.5 # Dropout rate to apply in networks
 
-base = 32 # Number of features to extract in architecture, in the first layer
+base = 64 # Number of features to extract in architecture, in the first layer
 
 kernel_size = 3 # Kernel size for convolutional architecture
 
@@ -107,34 +111,54 @@ num_layers = 3 # Number of encoder and decoder layers to be used
 if three_D or (not(three_D) and add3d > 0):
     
     if rnn is not None and rnn_position is not None:
+        
+        if supervision:
+            
+            network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_' + rnn + rnn_position + '_3DSupervision/'
+                
+        else:
     
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_' + rnn + rnn_position + '_3D/'
+            network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_' + rnn + rnn_position + '_3D/'
         
     elif rnn is not None and rnn_position is None:
         
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_' + rnn + '_3D/'
+        if supervision:
+            
+            network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_' + rnn + '_3DSupervision/'
+            
+        else:
+        
+            network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_' + rnn + '_3D/'
         
     elif rnn is None and rnn_position is None:
         
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_3D/'
+        if supervision:
+            
+            network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_3DSupervision/'
+        
+        else:
+        
+            network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_3D/'
     
 else:
     
-    if sum_work and not(multi_view):
+    if sum_work and not(supervision):
 
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2Dextra/' # Folder where to save data related to Deep Learning architecture 
+        network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_2Dextra/' # Folder where to save data related to Deep Learning architecture 
         
-    elif sum_work and multi_view:
+    elif sum_work and supervision:
         
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_multi_2Dextra/'
+        network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_2DextraSupervision/'
+        
+    elif not(sum_work) and supervision:
+        
+        network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_2DSupervision/'
 
-    elif not(sum_work) and not(multi_view):
+    elif not(sum_work) and not(supervision):
         
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_2D/' 
+        network_data_path = '/home/andres/Documents/_Data/Network_data_new/' + architecture + '_2D/' 
         
-    elif not(sum_work) and multi_view:
-        
-        network_data_path = '/home/andres/Documents/_Data/Network_data/' + architecture + '_multi_2D/' 
+
         
         
 # Training parameters
@@ -161,12 +185,12 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 50000
+I = 20000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*5000
+eval_frequency = batch_size*3000
 
 loss_frequency = batch_size*1000
 
@@ -176,7 +200,7 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.00001 # Learning rate
+lr = 0.000001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
@@ -187,7 +211,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, focal_dice, tversky, focal_tversky, exp_log, center, focal_center, bce or bce_dice loss
+loss_fun = 'focal_supervision' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, focal_dice, tversky, focal_tversky, exp_log, center, focal_center, focal_supervision, bce or bce_dice loss
 
 loss_beta = 0.3
 
