@@ -785,21 +785,21 @@ def connectedComponentsPostProcessing(x):
 
     # Transform tensor into Numpy array
 
-    x_array = x.cpu().numpy() # B,C,H,W (T)
+    #x_array = x.cpu().numpy() # B,C,H,W (T)
     
-    center = np.array(x_array.shape)//2
+    center = np.array(x.shape)//2
     
-    binary_array = torch.argmax(x, 1).cpu().numpy() # Inference output
+    #binary_array = torch.argmax(x, 1).cpu().numpy() # Inference output
 
     # Get labels from connected components for all elements in batch
     
-    out = torch.zeros(binary_array.shape)
+    out = np.zeros(x.shape)
 
-    if len(x_array.shape) == 4: # 2D arrays
+    if len(x.shape) == 3: # 2D arrays
 
-        for i in range(x_array.shape[0]):
+        for i in range(x.shape[0]):
 
-            labels = measure.label(binary_array[i,:,:], background = 0)
+            labels = measure.label(x[i,:,:], background = 0)
             
             median = np.median(labels.flatten()) # Label with background, to be excluded
             
@@ -835,11 +835,11 @@ def connectedComponentsPostProcessing(x):
                 
                 
 
-    elif len(x_array.shape) == 5: # 3D arrays
+    elif len(x.shape) == 4: # 3D arrays
 
-        for i in range(x_array.shape[0]):
+        for i in range(x.shape[0]):
 
-            labels = cc3d.connected_components(binary_array[i,:,:,:].astype(int)) # 26-connected
+            labels = cc3d.connected_components(x[i,:,:,:].astype(int)) # 26-connected
             
             median = np.median(labels.flatten()) # Label with background, to be excluded
             
@@ -873,8 +873,7 @@ def connectedComponentsPostProcessing(x):
                 ind_max = np.array(np.where(labels == label_max)) # Spatial coordinates of connected component with the highest probability
 
                 out[i, ind_max[0], ind_max[1], ind_max[2]] = 1
-                
-    out = out.cuda()
+
             
     return out
 

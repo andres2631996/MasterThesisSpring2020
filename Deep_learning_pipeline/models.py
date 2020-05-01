@@ -1869,7 +1869,86 @@ class convBlock2d(nn.Module):
         return out
     
     
+class convBlock2dtime(nn.Module):
+    
+    """
+    Convolutional block with time-distributed layers for time data processing
+    
+    Can optionally be used with recurrent units, too
+    
+    Params:
+    
+    - Init: ch_in: number of input channels // ch_out: number of output channels // key: flag stating if the block is in the encoder or in the decoder
+    
+    - Forward: x: input tensor
+    
+    Outputs: x: output tensor
+    
+    
+    """
+    
+    def __init__(self,ch_in,ch_mid,ch_out, key):
+        
+        super(convBlock2dtime,self).__init__()
+            
+        if params.rnn_position == 'full' or params.rnn_position == key:
+
+            if params.rnn == 'LSTM':
+
+                self.conv1 = ConvLSTM(ch_in, ch_mid, (params.kernel_size , params.kernel_size), 1, True, True, False)
+
+            elif params.rnn == 'GRU':
+
+                if torch.cuda.is_available():
+
+                    dtype = torch.cuda.FloatTensor # computation in GPU
+
+                else:
+
+                    dtype = torch.FloatTensor
+
+                self.conv1 = ConvGRU(ch_in, ch_mid, (params.kernel_size, params.kernel_size), 1, dtype, True, True, False)
+
+        else:
+
+            self.conv1 = TimeDistributed(nn.Conv2d(ch_in, ch_mid, kernel_size=params.kernel_size, stride=1, padding=params.padding, bias=True))
+        
+        self.bn1 = TimeDistributed(nn.InstanceNorm2d(ch_mid))
+        
+        self.relu1 = TimeDistributed(nn.ReLU(inplace=True))
+        
+        self.conv2 = TimeDistributed(nn.Conv2d(ch_mid, ch_out, kernel_size=params.kernel_size, stride=1, padding=params.padding, bias=True))
+        
+        self.bn2 = TimeDistributed(nn.InstanceNorm2d(ch_out))
+
+        self.relu2 = TimeDistributed(nn.ReLU(inplace=True))
+
+
+    def forward(self,x, key):
+        
+        if params.rnn_position == 'full' or params.rnn_position == key:
+        
+            x,_ = list(self.conv1(x))
+            
+            x1 = self.relu1(self.bn1(x[0]))
+            
+        else:
+        
+            x1 = self.relu1(self.bn1(self.conv1(x)))
+        
+        x2 = self.relu2(self.bn2(self.conv2(x1)))
+        
+        return x2
+    
+    
+    
+    
 class NestedUNet2d(nn.Module):
+    
+    """
+    Nested UNet from Zhou 2018
+    
+    """
     
     def __init__(self):
     
@@ -1917,13 +1996,13 @@ class NestedUNet2d(nn.Module):
         self.conv0_3 = convBlock2d(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
         
         
-        self.up10_01 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 1, padding = params.padding)
+        self.up10_01 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
         
-        self.up11_02 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 1, padding = params.padding)
+        self.up11_02 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
         
-        self.up12_03 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 1, padding = params.padding)
+        self.up12_03 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
         
-        self.up20_12 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 1, padding = params.padding)
+        self.up20_12 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
         
         self.Conv_1x1_03 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
         
@@ -1933,16 +2012,14 @@ class NestedUNet2d(nn.Module):
             
             self.Conv_1x1_01 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
 
-            
-        
-            
+       
     def forward(self, x):
         
         x_00 = self.conv0_0(x)
         
-        x_10 = self.conv1_0(x_00)
+        x_10 = self.conv1_0(self.pool(x_00))
         
-        x_20 = self.conv2_0(x_10)
+        x_20 = self.conv2_0(self.pool(x_10))
         
         x_01 = self.conv0_1(torch.cat((self.up10_01(x_10),x_00), dim = 1))
         
@@ -1968,3 +2045,114 @@ class NestedUNet2d(nn.Module):
             
             return x_03
         
+        
+class NestedUNet2dTime(nn.Module):
+    
+    """
+    Nested UNet from Zhou 2018, adapted to work in 2D+time
+    
+    """
+    
+    
+    def __init__(self):
+        
+        super(NestedUNet2dTime, self).__init__()
+        
+        self.pool = TimeDistributed(nn.MaxPool2d(2, 2))
+        
+        # Decide on number of input channels
+        
+        if 'both' in params.train_with:
+
+            in_chan = 2
+
+        else:
+
+            in_chan = 1
+
+            
+        self.conv0_0 = convBlock2dtime(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'encoder')
+
+        self.conv1_0 = convBlock2dtime(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'encoder')
+
+        self.conv2_0 = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), 'encoder')
+            
+        
+        self.conv1_2 = convBlock2dtime(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'decoder') 
+        
+        self.conv0_3 = convBlock2dtime(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'decoder')
+        
+            
+        self.conv0_1 = convBlock2dtime(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')
+        
+        self.conv1_1 = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'full')
+        
+        self.conv0_2 = convBlock2dtime(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')    
+            
+        self.up10_01 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up11_02 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up12_03 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up20_12 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.Conv_1x1_03 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+        
+        
+        if params.supervision:
+            
+            self.Conv_1x1_02 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+            
+            self.Conv_1x1_01 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+            
+        
+    def forward(self, x):
+        
+        # Reshape input: (B, C, H, W, T) --> (B*T, C, H, W)
+
+        x = x.view(x.shape[0], x.shape[-1], x.shape[1], x.shape[-3], x.shape[-2])
+        
+        x_00 = self.conv0_0(x, 'encoder')
+        
+        x_10 = self.conv1_0(self.pool(x_00), 'encoder')
+        
+        x_20 = self.conv2_0(self.pool(x_10), 'encoder')
+        
+        x_01_input = torch.cat((self.up10_01(x_10),x_00), dim = 2)
+        
+        x_01 = self.conv0_1(x_01_input, 'full')
+        
+        x_11 = self.conv1_1(x_10, 'full')
+        
+        x_02_input = torch.cat((self.up11_02(x_11), x_00, x_01),dim = 2)
+        
+        x_02 = self.conv0_2(x_02_input, 'full')
+        
+        x_12_input = torch.cat((self.up20_12(x_20), x_10, x_11),dim = 2)
+        
+        x_12 = self.conv1_2(x_12_input, 'decoder')
+        
+        x_03_input = torch.cat((self.up12_03(x_12), x_00, x_01, x_02), dim = 2)
+        
+        x_03 = self.conv0_3(x_03_input, 'decoder')
+        
+        x_03 = self.Conv_1x1_03(x_03)
+        
+        x_03 = x_03.view(params.batch_size, x_03.shape[2], x_03.shape[3], x_03.shape[4], x_03.shape[1])
+        
+        if params.supervision and not(params.test):
+            
+            x_01 = self.Conv_1x1_01(x_01) 
+            
+            x_02 = self.Conv_1x1_01(x_02)
+            
+            x_01 = x_01.view(params.batch_size, x_01.shape[2], x_01.shape[3], x_01.shape[4], x_01.shape[1])
+            
+            x_02 = x_02.view(params.batch_size, x_02.shape[2], x_02.shape[3], x_02.shape[4], x_02.shape[1])
+            
+            return [x_03, x_02, x_01]
+        
+        else:
+            
+            return x_03  

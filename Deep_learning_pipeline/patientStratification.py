@@ -99,13 +99,15 @@ class StratKFold:
     
         # Now decide fold information so that patients from the same group fall into different folds
             
-        skf = StratifiedKFold(n_splits = self.k, shuffle = True, random_state = 1)
+        skf = StratifiedKFold(n_splits = self.k, shuffle = True, random_state = 3)
     
         skf.get_n_splits(patients, labels)
         
         val_lists = []
         
         cont = 0
+        
+        # Indices obtained from Stratified k-Fold function in Scikit-learn
         
         for train_index, test_index in skf.split(patients, labels):
     
@@ -114,6 +116,8 @@ class StratKFold:
             random.shuffle(val_lists[cont]) # Shuffle patients inside
             
             cont += 1
+            
+
             
         return val_lists
     
@@ -396,10 +400,16 @@ class StratKFold:
         all_patients = list(itertools.chain.from_iterable(all_patients))
         
         patients, labels = self.stratification(all_patients, all_flows)
+        
+        patients_sort = np.sort(np.array(patients))
+        
+        l_array = np.array(labels)
+        
+        labels_sort = l_array[np.argsort(np.array(patients))]
            
         # Sort patients and flows according to their value
             
-        val_lists = self.StratifiedKFoldPatients(patients, labels)
+        val_lists = self.StratifiedKFoldPatients(patients_sort, labels_sort)
         
         # Repeat patients in each fold from minority studies
         
@@ -436,37 +446,37 @@ class StratKFold:
 # Test code
 
 
-rep = True # Factor allowing for repetition of patients from minority studies (Heroic and Extra)
-
-# Import information of EXCEL file with flow measurements of CKD1
-
-excel_path = '/home/andres/Documents/_Data/CKD_Part1/'
-
-excel_file = 'CKD_QFlow_results.xlsx' 
-
-raw_path_ckd1 = '/home/andres/Documents/_Data/_Patients/_Raw/_ckd1/'
-
-# CKD flow measurements in CKD Part 2
-
-raw_path_ckd2 = '/home/andres/Documents/_Data/CKD_Part2/4_Flow/'
-
-study2 = 'CKD2'
-
-raw_path_hero = '/home/andres/Documents/_Data/Heroic/_Flow/'
-
-studyh = 'Hero'
-
-raw_path_extr = '/home/andres/Documents/_Data/Extra/_Flow/'
-
-studye = 'Extr'
-
-k = 5
-    
-
-strKFolds = StratKFold([raw_path_ckd2, raw_path_hero, raw_path_extr], excel_path, 
-                            excel_file, raw_path_ckd1,[study2, studyh, studye], k, rep)
-
-val_lists, test_img, test_flow = strKFolds.__main__()
+#rep = True # Factor allowing for repetition of patients from minority studies (Heroic and Extra)
+#
+## Import information of EXCEL file with flow measurements of CKD1
+#
+#excel_path = '/home/andres/Documents/_Data/CKD_Part1/'
+#
+#excel_file = 'CKD_QFlow_results.xlsx' 
+#
+#raw_path_ckd1 = '/home/andres/Documents/_Data/_Patients/_Raw/_ckd1/'
+#
+## CKD flow measurements in CKD Part 2
+#
+#raw_path_ckd2 = '/home/andres/Documents/_Data/CKD_Part2/4_Flow/'
+#
+#study2 = 'CKD2'
+#
+#raw_path_hero = '/home/andres/Documents/_Data/Heroic/_Flow/'
+#
+#studyh = 'Hero'
+#
+#raw_path_extr = '/home/andres/Documents/_Data/Extra/_Flow/'
+#
+#studye = 'Extr'
+#
+#k = 5
+#    
+#
+#strKFolds = StratKFold([raw_path_ckd2, raw_path_hero, raw_path_extr], excel_path, 
+#                            excel_file, raw_path_ckd1,[study2, studyh, studye], k, rep)
+#
+#val_lists, test_img, test_flow = strKFolds.__main__()
 
 # To run in terminal:
 
