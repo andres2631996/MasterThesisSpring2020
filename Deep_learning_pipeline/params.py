@@ -45,19 +45,19 @@ rep = True # Repetition of minority studies in data presented to the network
 
 prep_step = 'crop' # Level of preprocessing to apply for images to the network
 
-train_with = 'magBF' # Type of images to train with
+train_with = 'mag_' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
-add3d = 2 # Number of past and future neighboring slices to build a 2.5D dataset
+add3d = 0 # Number of past and future neighboring slices to build a 2.5D dataset
 
-sum_work = False # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
+sum_work = True # If True, include an extra channel with the sum of all frames along time, else dont (only in 2D)
 
 channel_count = 1 # Channel counter
 
 multi_view = False # If True, allow for a multi-view analysis along time
 
-supervision = True # If True, perform deep supervision on given architecture
+supervision = False # If True, perform deep supervision on given architecture
 
 test = False # State if model is being trained (False) or tested/validated (True)
 
@@ -87,11 +87,11 @@ k = 4 # Number of cross validation folds
 
 # Architecture parameters
 
-rnn = 'GRU' # Type of recurrent architecture to be integrated with U-Net
+rnn = None # Type of recurrent architecture to be integrated with U-Net
 
-rnn_position = 'full' # Part of the U-Net with recurrent modules (encoder/decoder/full)
+rnn_position = None # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'TimeDistributedUNet' # Architecture type
+architecture = 'AttentionUNet' # Architecture type
 
 #architecture = 'UNetRNN'
 
@@ -186,12 +186,12 @@ xav_init = 0 # Xavier initialization of network weights
 
 # Iterations to train for
 
-I = 30000
+I = 75000
 
 # How often the model will be evaluated
 # During testing (K=1) this is only used to show how far the network has come
     
-eval_frequency = batch_size*3000
+eval_frequency = batch_size*5000
 
 loss_frequency = batch_size*1000
 

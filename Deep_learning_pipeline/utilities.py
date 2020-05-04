@@ -815,7 +815,7 @@ def connectedComponentsPostProcessing(x):
 
                 ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
                 
-                center_component = [np.mean(ind_label[0].flatten()), np.mean(ind_label[1].flatten())]
+                center_component = [np.median(ind_label[0].flatten()), np.median(ind_label[1].flatten())]
 
                 # Extract the mean value of each connected component
                 
@@ -855,7 +855,7 @@ def connectedComponentsPostProcessing(x):
 
                 ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
                 
-                center_component = [np.mean(ind_label[0].flatten()), np.mean(ind_label[1].flatten()), np.mean(ind_label[2].flatten())]
+                center_component = [np.median(ind_label[0].flatten()), np.median(ind_label[1].flatten()), np.median(ind_label[2].flatten())]
 
                 # Extract the mean value of each connected component
                 
