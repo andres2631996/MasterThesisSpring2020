@@ -26,6 +26,8 @@ from skimage import measure
 
 import utilities
 
+import matplotlib.pyplot as plt
+
 
 class Concat(nn.Module):
     
@@ -2037,7 +2039,7 @@ class NestedUNet2d(nn.Module):
             
             x_01 = self.Conv_1x1_01(x_01) 
             
-            x_02 = self.Conv_1x1_01(x_02)
+            x_02 = self.Conv_1x1_02(x_02)
             
             return [x_03, x_02, x_01]
         
@@ -2140,6 +2142,649 @@ class NestedUNet2dTime(nn.Module):
         x_03 = self.Conv_1x1_03(x_03)
         
         x_03 = x_03.view(params.batch_size, x_03.shape[2], x_03.shape[3], x_03.shape[4], x_03.shape[1])
+        
+        if params.supervision and not(params.test):
+            
+            x_01 = self.Conv_1x1_01(x_01) 
+            
+            x_02 = self.Conv_1x1_01(x_02)
+            
+            x_01 = x_01.view(params.batch_size, x_01.shape[2], x_01.shape[3], x_01.shape[4], x_01.shape[1])
+            
+            x_02 = x_02.view(params.batch_size, x_02.shape[2], x_02.shape[3], x_02.shape[4], x_02.shape[1])
+            
+            return [x_03, x_02, x_01]
+        
+        else:
+            
+            return x_03  
+        
+        
+        
+        
+        
+class NestedUNet2dAutocontext(nn.Module):
+    
+    """
+    Nested UNet from Zhou 2018, with autocontext iterations (cascaded U-Net)
+    
+    """
+    
+    def __init__(self):
+    
+        super(NestedUNet2dAutocontext, self).__init__()
+        
+        self.pool = nn.MaxPool2d(2, 2)
+        
+        # Provide number of input channels
+        
+        if params.sum_work and 'both' in params.train_with:
+
+            in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
+
+        elif (params.sum_work and not('both' in params.train_with)):
+
+            in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+
+        elif (not(params.sum_work) and 'both' in params.train_with):
+
+            in_chan = 2 # Train with magnitude + phase (no sum)
+
+        elif not(params.sum_work) and not('both' in params.train_with):
+
+            in_chan = 1 # Train magnitude or phase (no sum)
+            
+            
+
+        
+        self.conv0_0 = convBlock2d(in_chan + 1, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_0 = convBlock2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        self.conv2_0 = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
+        
+        
+        
+        self.conv0_1 = convBlock2d(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_1 = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        
+        self.conv0_2 = convBlock2d(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_2 = convBlock2d(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2))) 
+        
+        self.conv0_3 = convBlock2d(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        
+        self.up10_01 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up11_02 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up12_03 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up20_12 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.Conv_1x1_03 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+        
+        if params.supervision:
+            
+            self.Conv_1x1_02 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+            
+            self.Conv_1x1_01 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+
+       
+    def forward(self, x):
+        
+        for i in range(params.autocontext_iter):
+            
+            if i == 0:
+        
+                x_out = torch.zeros(x.shape[0],1,x.shape[-2],x.shape[-1]) + 0.5
+            
+                x_out = x_out.cuda()
+            
+            else:
+                
+                x_out = torch.argmax(x_03, 1).cuda().float()
+                
+                x_out += 0.5
+                
+                x_out = x_out.view(x.shape[0],1,x.shape[-2],x.shape[-1])
+                
+            x_in = torch.cat([x,x_out], dim=1)
+                
+            x_00 = self.conv0_0(x_in)
+
+            x_10 = self.conv1_0(self.pool(x_00))
+
+            x_20 = self.conv2_0(self.pool(x_10))
+
+            x_01 = self.conv0_1(torch.cat((self.up10_01(x_10),x_00), dim = 1))
+
+            x_11 = self.conv1_1(x_10)
+
+            x_02 = self.conv0_2(torch.cat((self.up11_02(x_11), x_00, x_01),dim = 1))
+
+            x_12 = self.conv1_2(torch.cat((self.up20_12(x_20), x_10, x_11),dim = 1))
+
+            x_03 = self.conv0_3(torch.cat((self.up12_03(x_12), x_00, x_01, x_02), dim = 1))
+
+            x_03 = self.Conv_1x1_03(x_03)
+                
+            if params.supervision and not(params.test) and i == params.autocontext_iter - 1:
+
+                x_01 = self.Conv_1x1_01(x_01) 
+
+                x_02 = self.Conv_1x1_01(x_02)
+
+                return [x_03, x_02, x_01]
+
+            elif (not(params.supervision) and i == params.autocontext_iter - 1) or (params.test and i == params.autocontext_iter - 1):
+
+                return x_03
+
+            
+            
+class NestedUNet2dTimeAutocontext(nn.Module):
+    
+    """
+    Nested UNet from Zhou 2018, adapted to work in 2D+time, including autocontext
+    
+    """
+    
+    
+    def __init__(self):
+        
+        super(NestedUNet2dTimeAutocontext, self).__init__()
+        
+        self.pool = TimeDistributed(nn.MaxPool2d(2, 2))
+        
+        # Decide on number of input channels
+        
+        if 'both' in params.train_with:
+
+            in_chan = 2
+
+        else:
+
+            in_chan = 1
+
+            
+        self.conv0_0 = convBlock2dtime(in_chan + 1, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'encoder')
+
+        self.conv1_0 = convBlock2dtime(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'encoder')
+
+        self.conv2_0 = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), 'encoder')
+            
+        
+        self.conv1_2 = convBlock2dtime(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'decoder') 
+        
+        self.conv0_3 = convBlock2dtime(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'decoder')
+        
+            
+        self.conv0_1 = convBlock2dtime(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')
+        
+        self.conv1_1 = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'full')
+        
+        self.conv0_2 = convBlock2dtime(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')    
+            
+        self.up10_01 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up11_02 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up12_03 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up20_12 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.Conv_1x1_03 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+        
+        
+        if params.supervision:
+            
+            self.Conv_1x1_02 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+            
+            self.Conv_1x1_01 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+            
+        
+    def forward(self, x):
+        
+        for i in range(params.autocontext_iter):
+            
+            if i == 0:
+        
+                x_out = torch.zeros(x.shape[0],1,x.shape[-3],x.shape[-2],x.shape[-1]) + 0.5
+            
+                x_out = x_out.cuda()
+            
+            else:
+                
+                x_out = torch.argmax(x_03, 1).cuda().float()
+                
+                x_out += 0.5
+                
+                x_out = x_out.view(x.shape[0],1,x.shape[-3], x.shape[-2],x.shape[-1])
+                
+            x_in = torch.cat([x,x_out], dim=1)
+        
+            # Reshape input: (B, C, H, W, T) --> (B, T, C, H, W)
+
+            x_in = x_in.view(x_in.shape[0], x_in.shape[-1], x_in.shape[1], x_in.shape[-3], x_in.shape[-2])
+
+            x_00 = self.conv0_0(x_in, 'encoder')
+
+            x_10 = self.conv1_0(self.pool(x_00), 'encoder')
+
+            x_20 = self.conv2_0(self.pool(x_10), 'encoder')
+
+            x_01_input = torch.cat((self.up10_01(x_10),x_00), dim = 2)
+
+            x_01 = self.conv0_1(x_01_input, 'full')
+
+            x_11 = self.conv1_1(x_10, 'full')
+
+            x_02_input = torch.cat((self.up11_02(x_11), x_00, x_01),dim = 2)
+
+            x_02 = self.conv0_2(x_02_input, 'full')
+
+            x_12_input = torch.cat((self.up20_12(x_20), x_10, x_11),dim = 2)
+
+            x_12 = self.conv1_2(x_12_input, 'decoder')
+
+            x_03_input = torch.cat((self.up12_03(x_12), x_00, x_01, x_02), dim = 2)
+
+            x_03 = self.conv0_3(x_03_input, 'decoder')
+
+            x_03 = self.Conv_1x1_03(x_03)
+
+            x_03 = x_03.view(params.batch_size, x_03.shape[2], x_03.shape[3], x_03.shape[4], x_03.shape[1])
+
+            if params.supervision and not(params.test) and i == params.autocontext_iter - 1:
+
+                x_01 = self.Conv_1x1_01(x_01) 
+
+                x_02 = self.Conv_1x1_01(x_02)
+
+                x_01 = x_01.view(params.batch_size, x_01.shape[2], x_01.shape[3], x_01.shape[4], x_01.shape[1])
+
+                x_02 = x_02.view(params.batch_size, x_02.shape[2], x_02.shape[3], x_02.shape[4], x_02.shape[1])
+
+                return [x_03, x_02, x_01]
+
+            elif (not(params.supervision) and i == params.autocontext_iter - 1) or (params.test and i == params.autocontext_iter - 1):
+
+                return x_03  
+            
+            
+            
+            
+            
+class NestedUNet2dScale(nn.Module):
+    
+    
+    """
+    Nested U-Net from Zhou, 2018 with two stacked units. One for coarse scale analysis and vessel location and another one for fine scale analysis and definitive segmentation
+    
+    """
+    
+    
+    def __init__(self):
+        
+        super(NestedUNet2dScale, self).__init__()
+        
+        self.pool = nn.MaxPool2d(2, 2)
+        
+        # Provide number of input channels
+        
+        if params.sum_work and 'both' in params.train_with:
+
+            in_chan = 7 # Train with magnitude + phase + sum of both along time + MIP of both along time
+
+        elif (params.sum_work and not('both' in params.train_with)):
+
+            in_chan = 3 # Train with magnitude or phase, sum in time and MIP in time
+
+        elif (not(params.sum_work) and 'both' in params.train_with):
+
+            in_chan = 2 # Train with magnitude + phase (no sum)
+
+        elif not(params.sum_work) and not('both' in params.train_with):
+
+            in_chan = 1 # Train magnitude or phase (no sum)
+            
+            
+        self.pad = addRowCol2d()
+        
+        
+        self.conv0_0 = convBlock2d(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_0 = convBlock2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        self.conv2_0 = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
+        
+        
+        
+        self.conv0_1 = convBlock2d(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_1 = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        
+        self.conv0_2 = convBlock2d(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_2 = convBlock2d(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2))) 
+        
+        self.conv0_3 = convBlock2d(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        
+        self.up10_01 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up11_02 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up12_03 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up20_12 = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.Conv_1x1_03 = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+        
+        
+        
+        self.conv0_0_new = convBlock2d(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_0_new = convBlock2d(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        self.conv2_0_new = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)))
+        
+        
+        
+        self.conv0_1_new = convBlock2d(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_1_new = convBlock2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)))
+        
+        
+        self.conv0_2_new = convBlock2d(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        self.conv1_2_new = convBlock2d(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2))) 
+        
+        self.conv0_3_new = convBlock2d(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
+        
+        
+        self.up10_01_new = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up11_02_new = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up12_03_new = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.up20_12_new = nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1)
+        
+        self.Conv_1x1_03_new = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+        
+        
+        if params.supervision:
+            
+            self.Conv_1x1_02_new = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+            
+            self.Conv_1x1_01_new = nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0)
+
+       
+    def forward(self, x):
+        
+        x_00 = self.conv0_0(x)
+        
+        x_10 = self.conv1_0(self.pool(x_00))
+        
+        x_20 = self.conv2_0(self.pool(x_10))
+        
+        x_01 = self.conv0_1(torch.cat((self.up10_01(x_10),x_00), dim = 1))
+        
+        x_11 = self.conv1_1(x_10)
+        
+        x_02 = self.conv0_2(torch.cat((self.up11_02(x_11), x_00, x_01),dim = 1))
+        
+        x_12 = self.conv1_2(torch.cat((self.up20_12(x_20), x_10, x_11),dim = 1))
+        
+        x_03 = self.conv0_3(torch.cat((self.up12_03(x_12), x_00, x_01, x_02), dim = 1))
+        
+        x_03 = self.Conv_1x1_03(x_03)
+        
+        
+        x_inter, pads, final_centers, diff_values = utilities.connectedComponentsModule(x_03, x)
+        
+        x_inter_array = x_inter.cpu().detach().numpy()
+        
+        x_00_new = self.conv0_0_new(x_inter)
+        
+        x_10_new = self.conv1_0_new(self.pool(x_00_new))
+        
+        x_20_new = self.conv2_0_new(self.pool(x_10_new))
+        
+        if (self.up10_01_new(x_10_new).shape[-2] != x_00_new.shape[-2]) or (self.up10_01_new(x_10_new).shape[-1] != x_00_new.shape[-1]):
+            
+            up10_01_new = self.pad(self.up10_01_new(x_10_new), x_00_new.shape)
+            
+        else:
+            
+            up10_01_new = self.up10_01_new(x_10_new).clone()
+        
+        x_01_new = self.conv0_1_new(torch.cat((up10_01_new,x_00_new), dim = 1))
+        
+        x_11_new = self.conv1_1_new(x_10_new)
+        
+        if (self.up11_02_new(x_11_new).shape[-2] != x_00_new.shape[-2]) or (self.up11_02_new(x_11_new).shape[-1] != x_00_new.shape[-1]):
+            
+            up11_02_new = self.pad(self.up11_02_new(x_11_new), x_00_new.shape)
+            
+        else:
+            
+            up11_02_new = self.up11_02_new(x_11_new).clone()
+        
+        x_02_new = self.conv0_2_new(torch.cat((up11_02_new, x_00_new, x_01_new),dim = 1))
+        
+        if (self.up11_02_new(x_11_new).shape[-2] != x_10_new.shape[-2]) or (self.up11_02_new(x_11_new).shape[-1] != x_10_new.shape[-1]):
+            
+            up20_12_new = self.pad(self.up20_12_new(x_20_new), x_10_new.shape)
+            
+        else:
+            
+            up20_12_new = self.up20_12_new(x_20_new).clone()
+        
+        x_12_new = self.conv1_2_new(torch.cat((up20_12_new, x_10_new, x_11_new),dim = 1))
+        
+        if (self.up12_03_new(x_12_new).shape[-2] != x_00_new.shape[-2]) or (self.up12_03_new(x_12_new).shape[-1] != x_00_new.shape[-1]):
+            
+            up12_03_new = self.pad(self.up12_03_new(x_12_new), x_00_new.shape)
+            
+        else:
+            
+            up12_03_new = self.up12_03_new(x_12_new).clone()
+        
+        x_03_new = self.conv0_3_new(torch.cat((up12_03_new, x_00_new, x_01_new, x_02_new), dim = 1))
+        
+        x_03_new = self.Conv_1x1_03_new(x_03_new)
+        
+        x_03_out = utilities.padding(x_03_new, pads)
+        
+        if params.supervision and not(params.test):
+            
+            x_01_new = self.Conv_1x1_01_new(x_01_new) 
+            
+            x_02_new = self.Conv_1x1_02_new(x_02_new)
+            
+            x_01_out = utilities.padding(x_01_new, pads) 
+            
+            x_02_out = utilities.padding(x_02_new, pads)
+            
+            return [x_03_new, x_02_new, x_01_new], final_centers, diff_values, pads
+        
+        elif params.test:
+            
+            return x_03_out
+        
+        else:
+            
+            return x_03_new, final_centers, diff_values, pads
+        
+        
+        
+        
+class NestedUNet2dTimeScale(nn.Module):
+    
+    """
+    Nested UNet from Zhou 2018, adapted to work in 2D+time. In a second iteration, works at a finer scale
+    
+    """
+    
+    
+    def __init__(self):
+        
+        super(NestedUNet2dTimeScale, self).__init__()
+        
+        self.pool = TimeDistributed(nn.MaxPool2d(2, 2))
+        
+        # Decide on number of input channels
+        
+        if 'both' in params.train_with:
+
+            in_chan = 2
+
+        else:
+
+            in_chan = 1
+
+            
+        self.conv0_0 = convBlock2dtime(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'encoder')
+
+        self.conv1_0 = convBlock2dtime(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'encoder')
+
+        self.conv2_0 = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), 'encoder')
+            
+        
+        self.conv1_2 = convBlock2dtime(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'decoder') 
+        
+        self.conv0_3 = convBlock2dtime(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'decoder')
+        
+            
+        self.conv0_1 = convBlock2dtime(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')
+        
+        self.conv1_1 = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'full')
+        
+        self.conv0_2 = convBlock2dtime(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')    
+            
+        self.up10_01 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up11_02 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up12_03 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up20_12 = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.Conv_1x1_03 = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+        
+        
+        
+        
+        self.conv0_0_new = convBlock2dtime(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'encoder')
+
+        self.conv1_0_new = convBlock2dtime(params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'encoder')
+
+        self.conv2_0_new = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), 'encoder')
+            
+        
+        self.conv1_2_new = convBlock2dtime(params.base*(2**(params.num_layers - 2))*2 + params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'decoder') 
+        
+        self.conv0_3_new = convBlock2dtime(params.base*(2**(params.num_layers - 3))*3 + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'decoder')
+        
+            
+        self.conv0_1_new = convBlock2dtime(params.base*(2**(params.num_layers - 3)) + params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')
+        
+        self.conv1_1_new = convBlock2dtime(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), 'full')
+        
+        self.conv0_2_new = convBlock2dtime(params.base*(2**(params.num_layers - 2)) + params.base*(2**(params.num_layers - 3))*2, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'full')    
+            
+        self.up10_01_new = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up11_02_new = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up12_03_new = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 2)), params.base*(2**(params.num_layers - 2)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.up20_12_new = TimeDistributed(nn.ConvTranspose2d(params.base*(2**(params.num_layers - 1)), params.base*(2**(params.num_layers - 1)), params.kernel_size, stride = 2, padding = params.padding, output_padding = 1))
+        
+        self.Conv_1x1_03_new = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+        
+        
+        if params.supervision:
+            
+            self.Conv_1x1_02_new = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+            
+            self.Conv_1x1_01_new = TimeDistributed(nn.Conv2d(params.base*(2**(params.num_layers - 3)), len(params.class_weights), kernel_size=1, stride=1,padding=0))
+            
+        
+    def forward(self, x):
+        
+        # Reshape input: (B, C, H, W, T) --> (B*T, C, H, W)
+
+        x_v = x.view(x.shape[0], x.shape[-1], x.shape[1], x.shape[-3], x.shape[-2])
+        
+        x_00 = self.conv0_0(x_v, 'encoder')
+        
+        x_10 = self.conv1_0(self.pool(x_00), 'encoder')
+        
+        x_20 = self.conv2_0(self.pool(x_10), 'encoder')
+        
+        x_01_input = torch.cat((self.up10_01(x_10),x_00), dim = 2)
+        
+        x_01 = self.conv0_1(x_01_input, 'full')
+        
+        x_11 = self.conv1_1(x_10, 'full')
+        
+        x_02_input = torch.cat((self.up11_02(x_11), x_00, x_01),dim = 2)
+        
+        x_02 = self.conv0_2(x_02_input, 'full')
+        
+        x_12_input = torch.cat((self.up20_12(x_20), x_10, x_11),dim = 2)
+        
+        x_12 = self.conv1_2(x_12_input, 'decoder')
+        
+        x_03_input = torch.cat((self.up12_03(x_12), x_00, x_01, x_02), dim = 2)
+        
+        x_03 = self.conv0_3(x_03_input, 'decoder')
+        
+        x_03 = self.Conv_1x1_03(x_03)
+        
+        x_03 = x_03.view(params.batch_size, x_03.shape[2], x_03.shape[3], x_03.shape[4], x_03.shape[1])
+        
+        x_inter, pads, final_centers, diff_values = utilities.connectedComponentsModule(x_03, x)
+        
+        
+        x_00_new = self.conv0_0_new(x_v, 'encoder')
+        
+        x_10_new = self.conv1_0_new(self.pool(x_00_new), 'encoder')
+        
+        x_20_new = self.conv2_0_new(self.pool(x_10_new), 'encoder')
+        
+        x_01_input_new = torch.cat((self.up10_01_new(x_10_new),x_00_new), dim = 2)
+        
+        x_01_new = self.conv0_1_new(x_01_input_new, 'full')
+        
+        x_11_new = self.conv1_1_new(x_10_new, 'full')
+        
+        x_02_input_new = torch.cat((self.up11_02_new(x_11_new), x_00_new, x_01_new),dim = 2)
+        
+        x_02_new = self.conv0_2_new(x_02_input_new, 'full')
+        
+        x_12_input_new = torch.cat((self.up20_12_new(x_20_new), x_10_new, x_11_new),dim = 2)
+        
+        x_12_new = self.conv1_2_new(x_12_input_new, 'decoder')
+        
+        x_03_input_new = torch.cat((self.up12_03_new(x_12_new), x_00_new, x_01_new, x_02_new), dim = 2)
+        
+        x_03_new = self.conv0_3_new(x_03_input_new, 'decoder')
+        
+        x_03_new = self.Conv_1x1_03_new(x_03_new)
+        
+        x_03_new = x_03_new.view(params.batch_size, x_03_new.shape[2], x_03_new.shape[3], x_03_new.shape[4], x_03_new.shape[1])
+
+        
+        
         
         if params.supervision and not(params.test):
             

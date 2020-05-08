@@ -99,7 +99,7 @@ def optimizerExtractor(net):
 
 
 
-def lossSelection(output, Y, i):
+def lossSelection(output, Y, i, centers = None, diffs = None):
     
     """
     Select the desired loss function among a set of possible options in the 
@@ -113,6 +113,9 @@ def lossSelection(output, Y, i):
         
         - i: iteration number
         
+        - centers: for scaled architectures, center where to focus the target (by default, None)
+        
+        - diffs: for scaled architectures, differences where to focus the target (by default, None)
     
     """
     
@@ -191,7 +194,13 @@ def lossSelection(output, Y, i):
         
     elif params.loss_fun == 'focal_supervision':
         
-        loss = utilities.focal_supervision_loss(output, Y.cuda(non_blocking=True))
+        if params.architecture == "NestedUNet2dScale":
+            
+            loss = utilities.focal_supervision_loss(output, Y.cuda(non_blocking=True), centers, diffs)
+   
+        else:
+        
+            loss = utilities.focal_supervision_loss(output, Y.cuda(non_blocking=True))
         
         found = 1
         
@@ -384,9 +393,39 @@ def train(net, loader_train, loader_val = None, k = 0):
                             
                     #Send sample(s) through the net
                     
-                    output = net(Xpart.cuda(non_blocking=True))
+                    if params.architecture != "NestedUNet2dScale":
                     
-                    loss = lossSelection(output, Ypart, i) # Computed loss
+                        output = net(Xpart.cuda(non_blocking=True))
+                        
+                        centers = None
+                        
+                        diffs = None
+                        
+                    else:
+                        
+                        params.test = False
+                        
+                        output, centers, diffs, pads = net(Xpart.cuda(non_blocking=True))
+                        
+                    #out = torch.argmax(output[0],1).cpu().detach().numpy()
+                    
+                    #pad = np.pad(out[0,:,:],((pads[0][0], pads[0][1]),(pads[0][2], pads[0][3])))
+                    
+                    #plt.figure(figsize = (13,5))
+                    
+                    #plt.subplot(131)
+                    
+                    #plt.imshow(Xpart.cpu().detach().numpy()[0,0,:,:], cmap = 'gray')
+                    
+                    #plt.subplot(132)
+                    
+                    #plt.imshow(Ypart.cpu().numpy()[0,:,:], cmap = 'gray')
+                    
+                    #plt.subplot(133)
+                    
+                    #plt.imshow(pad, cmap = 'gray')
+                    
+                    loss = lossSelection(output, Ypart, i, centers, diffs) # Computed loss
                     
                     losses.append(loss.item())
 
@@ -429,24 +468,11 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                     #Evaluate a series of metrics at this point in training
                     
-#                    plt.figure(figsize = (13,5))
-#                    
-#                    plt.subplot(131)
-#                    
-#                    plt.imshow(Xpart.cpu().detach().numpy()[0,0,:,:], cmap = 'gray')
-#                    
-#                    plt.subplot(132)
-#                    
-#                    plt.imshow(Ypart.cpu().numpy()[0,:,:], cmap = 'gray')
-#                    
-#                    plt.subplot(133)
-#                    
-#                    plt.imshow(out.cpu().detach().numpy()[0,:,:], cmap = 'gray')
-                    
-                    
                     #results_train = evaluate.evaluate(net, loader_train, i)
                     
                     results_eval = evaluate.evaluate(net, loader_val, i, 'val')
+                    
+                    params.test = False
 
                     eval_metrics.append(results_eval)
                     

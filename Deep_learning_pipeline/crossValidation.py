@@ -453,7 +453,7 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
     
             #Write patientPartioning files
             
-            with open(data_path + "PatientPartioning_k=" + str(k), 'w') as file:
+            with open(data_path + "PatientPartioning_k=" + str(k) + '.txt', 'w') as file:
                 
                 file.write('Patients used for training')
                 
@@ -666,6 +666,10 @@ for k in range(K):
     elif params.architecture == "NestedUNet2d":
         
         net = models.NestedUNet2d().cuda()
+        
+    elif params.architecture == "NestedUNet2dAutocontext":
+        
+        net = models.NestedUNet2dAutocontext().cuda()
         
         # MORE MODELS TO COME!!!        
         #    elif params.arch_type == "VGG11":

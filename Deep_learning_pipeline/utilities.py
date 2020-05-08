@@ -295,7 +295,7 @@ def connectedComponents(x):
 
 
 
-def focal_loss(output, target, weights=None, size_average=True, gamma= 1/params.loss_gamma, eps = 10**-6):
+def focal_loss(output, target, centers = None, diffs = None, weights=None, size_average=True, gamma= 1/params.loss_gamma, eps = 10**-6):
     
     """
     Computes focal loss.
@@ -335,8 +335,28 @@ def focal_loss(output, target, weights=None, size_average=True, gamma= 1/params.
     # Weigh predictions by confidence
     
     output_conf = conf * output
+    
+    if centers is None and diffs is None:
 
-    loss = F.nll_loss(output_conf, target, weights)
+        loss = F.nll_loss(output_conf, target, weights)
+        
+    else:
+        
+        target = target.cpu().numpy()
+        
+        cropped_target = []
+        
+        if len(target.shape) == 3:
+        
+            for i in range(target.shape[0]):
+
+                cropped_target.append(target[i, centers[i][0] - diffs[i][0]: centers[i][0] + diffs[i][1], centers[i][1] - diffs[i][2]: centers[i][1] + diffs[i][3]])
+                
+        cropped_target_array = np.array(cropped_target)
+        
+        cropped_target = torch.from_numpy(cropped_target_array).cuda()
+ 
+        loss = F.nll_loss(output_conf, cropped_target, weights)
     
     return loss
 
@@ -362,7 +382,7 @@ def focal_dice_loss(output, target):
     return focal_loss(output, target) + generalized_dice_loss(output, target)
 
 
-def focal_supervision_loss(output, target):
+def focal_supervision_loss(output, target, centers = None, diffs = None):
     
     """
     Focal loss for deep supervision. It takes into account not only the output of the final model layer, but also from intermediate layers
@@ -377,9 +397,17 @@ def focal_supervision_loss(output, target):
     
     loss = 0
     
-    for i in range(len(output)):
+    if centers is None and diffs is None:
+    
+        for i in range(len(output)):
+
+            loss += focal_loss(output[i], target)
+            
+    else:
         
-        loss += focal_loss(output[i], target)
+        for i in range(len(output)):
+
+            loss += focal_loss(output[i], target, centers = centers, diffs = diffs)
         
     return loss
 
@@ -878,9 +906,316 @@ def connectedComponentsPostProcessing(x):
     return out
 
 
-#def persistent_homology(
 
 
+def padDifference(center, orig_shape, desired_shape):
+    
+    
+    """
+    Compute values for padding and differences for cropping array in a given way
+    
+    Params:
+    
+        - center: center of main connected component
+        
+        - orig_shape: original shape of tensor to crop
+        
+        - desired_shape: desired shape of tensor to crop
+        
+        
+    Output:
+    
+        - pads: list with coordinates for later padding
+        
+        - diffs: list with differences of coordinates for later cropping
+    
+    """
+    
+    pad_x_up = center[0] - desired_shape[0]//2
+                    
+    pad_x_down = orig_shape[-2] - desired_shape[0]//2 - center[0]
+
+    diff_x_up = desired_shape[0]//2
+
+    diff_x_down = desired_shape[0]//2
+
+    if (center[0] - desired_shape[0]//2) < 0:
+
+        pad_x_up = 0
+
+        diff_x_up = center[0]
+
+    elif (center[0] + desired_shape[0]//2) > orig_shape[-2]:
+
+        pad_x_down = 0
+
+        diff_x_down = orig_shape[-2] - center[0]
+        
+    
+    pad_y_left = center[1] - desired_shape[1]//2
+                    
+    pad_y_right = orig_shape[-1] - desired_shape[1]//2 - center[1]
+
+    diff_y_left = desired_shape[1]//2
+
+    diff_y_right = desired_shape[1]//2
+
+    if (center[1] - desired_shape[1]//2) < 0:
+
+        pad_y_left = 0
+
+        diff_y_left = center[1]
+
+    elif (center[1] + desired_shape[1]//2) > orig_shape[-1]:
+
+        pad_y_right = 0
+
+        diff_y_right = orig_shape[-1] - center[1]
+
+    pads = [pad_x_up, pad_x_down, pad_y_left, pad_y_right]
+    
+    diffs = [diff_x_up, diff_x_down, diff_y_left, diff_y_right]
+    
+    return pads, diffs
+
+
+def connectedComponentsModule(x, inp):
+    
+    """
+    Focus attention on the most important connected component of a tensor.
+    Return centers of most important connected component
+    Return pad values for coordinates, for later padding
+    Return cropped version of tensor around the center of the most important connected component
+    Return list of differences for later cropping of input images in second network
+
+    
+    Params:
+    
+        - x: output tensor from first pipeline run
+        
+        - inp: input tensor from pipeline
+        
+    Returns:
+        
+        - x_out: cropped input tensor with 16x16 matrix around main connected component
+        
+        - pad_values: list of coordinate values for later padding
+        
+        - final_centers: list of centers for padding
+        
+        - diff_values: list of differences for padding
+    
+    """ 
+
+    # Transform tensor into Numpy array
+
+    x_array = x.detach().cpu().numpy() # B,C,H,W (T)
+    
+    inp_array = inp.detach().cpu().numpy()
+    
+    center = np.array(x.shape)//2
+    
+    binary_array = torch.argmax(x, 1).detach().cpu().numpy() # Inference output
+
+    # Get labels from connected components for all elements in batch
+    
+    pad_values = []
+    
+    diff_values = []
+    
+    final_centers = []
+    
+    out = []
+    
+    x_out = []
+
+    if len(x.shape) == 4: # 2D arrays
+
+        for i in range(x.shape[0]):
+
+            labels = measure.label(binary_array[i,:,:], background = 0)
+            
+            median = np.median(labels.flatten()) # Label with background, to be excluded
+            
+            unique_labels = np.unique(labels.flatten())
+            
+            unique_labels = np.delete(unique_labels, np.where(unique_labels == median)) 
+            
+            num_labels = len(unique_labels)
+            
+            probs = []
+            
+            centers = []
+
+            for label in unique_labels:
+
+                ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+                
+                center_component = [int(np.median(ind_label[0].flatten())), int(np.median(ind_label[1].flatten()))]
+
+                # Extract the mean value of each connected component
+                
+                probs.append(np.sum(np.abs(np.array(center_component) - np.array([center[-2],center[-1]]))))
+                
+                # Save centers of connected components in a list
+                
+                centers.append(center_component)
+                
+            prob_sorted = sorted(probs)
+            
+            if len(probs) > 0:
+                
+                ind_max = probs.index(prob_sorted[0]) # Index of connected component with the highest probability of being vessel
+
+                label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
+                
+                final_center = centers[ind_max]
+                
+                final_centers.append(final_center)
+                
+                # Cropping
+                
+                pad, diff = padDifference(final_center, x.shape, [32,32])
+                
+                pad_values.append(pad)
+                
+                diff_values.append(diff)
+                
+                out.append(binary_array[i,(final_center[0]-diff[0]):(final_center[0]+diff[1]), (final_center[1]-diff[2]):(final_center[1]+diff[3])])
+                
+                for c in range(inp.shape[1]):
+
+                    #if c == inp.shape[1]:
+                    
+                     #   x_out.append(out[-1])
+                        
+                    #else:
+                        
+                    x_out.append(inp_array[i,c,final_center[0]-diff[0]:final_center[0]+diff[1], final_center[1]-diff[2]:final_center[1]+diff[3]])
+                        
+                        
+                
+                
+
+    elif len(x.shape) == 5: # 3D arrays
+
+        for i in range(x.shape[0]):
+
+            labels = cc3d.connected_components(binary_array[i,:,:,:].astype(int)) # 26-connected
+            
+            median = np.median(labels.flatten()) # Label with background, to be excluded
+            
+            unique_labels = np.unique(labels.flatten())
+            
+            unique_labels = np.delete(unique_labels, np.where(unique_labels == median)) 
+            
+            num_labels = len(unique_labels)
+            
+            probs = []
+            
+            centers = []
+
+            for label in unique_labels:
+
+                ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
+                
+                center_component = [np.median(ind_label[0].flatten()), np.median(ind_label[1].flatten()), np.median(ind_label[2].flatten())]
+
+                # Extract the mean value of each connected component
+                
+                probs.append(np.sum(np.abs(np.array(center_component) - np.array([center[-3], center[-2],center[-1]]))))
+                
+                # Save centers of connected components in a list
+                
+                centers.append(center_component)
+
+            
+            if len(probs) > 0:
+                
+                prob_sorted = sorted(probs)
+
+                ind_max = probs.index(min(probs)) # Index of connected component with the highest probability of being vessel
+
+                label_max = unique_labels[ind_max] # Label number of the connected component with the highest probability
+
+                final_center = centers[ind_max]
+                
+                final_centers.append(final_center)
+                
+                # Cropping
+                
+                pad, diff = padDifference(final_center, x.shape, [32,32])
+                
+                pad_values.append(pad)
+                
+                diff_values.append(diff)
+                
+                out.append(binary_array[i,final_center[0]-diff[0]:final_center[0]+diff[1], final_center[1]-diff[2]:final_center[1]+diff[3],:])
+                
+                for c in range(inp.shape[1]):
+
+                    #if c == inp.shape[1]:
+                    
+                     #   x_out.append(out[-1])
+                        
+                    #else:
+                        
+                    x_out.append(inp_array[i,c,final_center[0]-diff[0]:final_center[0]+diff[1], final_center[1]-diff[2]:final_center[1]+diff[3],:])
+                        
+                        
+    out = np.array(out)
+    
+    x_out = np.array(x_out)
+    
+    x_out = np.expand_dims(x_out,0)
+                
+    out = torch.from_numpy(out).cuda().float()
+    
+    x_out = torch.from_numpy(x_out).cuda().float()
+            
+    return x_out, pad_values, final_centers, diff_values
+
+
+def padding(x, pad_list):
+    
+    """
+    Pad a tensor with a given list
+    
+    Params:
+    
+        - x: input tensor
+        
+        - pad_list: list with padding patterns for all tensors in the mini-batch
+        
+    Returns:
+    
+        - out: padded tensor
+    
+    """
+    
+    x_array = x.detach().cpu().numpy()
+    
+    binary_array = torch.argmax(x, 1).detach().cpu().numpy()
+    
+    out = []
+    
+    if len(x_array.shape) == 4:
+
+        for i in range(x_array.shape[0]):
+
+            out.append(np.pad(binary_array[i,:,:], ((pad_list[i][0], pad_list[i][1]),(pad_list[i][-2], pad_list[i][-1]))))
+            
+    elif len(x_array.shape) == 5:
+
+        for i in range(x_array.shape[0]):
+
+            out.append(np.pad(binary_array[i,:,:,:], ((pad_list[i][0], pad_list[i][1]),(pad_list[i][-2], pad_list[i][-1]))))
+            
+    out = np.array(out)
+            
+    out = torch.from_numpy(out).cuda()
+    
+    return out
 
 
 

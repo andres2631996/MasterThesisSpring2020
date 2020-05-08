@@ -38,14 +38,20 @@ flow_folders = [raw_path_ckd2, raw_path_hero, raw_path_extr] # Folders with flow
 
 studies_flow = ['CKD2', 'Hero', 'Extr'] # Studies with flow information
 
-rep = True # Repetition of minority studies in data presented to the network
+#flow_folders = [raw_path_ckd2, raw_path_extr] # Folders with flow information for patient stratification
+
+#studies_flow = ['CKD2', 'Extr'] # Studies with flow information
+
+
+
+rep = True # Repetition of minority studies in data presented to the network 
 
 
 # Data selection parameters
 
 prep_step = 'crop' # Level of preprocessing to apply for images to the network
 
-train_with = 'mag_' # Type of images to train with
+train_with = 'magBF' # Type of images to train with
 
 three_D = False # Train with separate 2D slices or 2D + time volumes
 
@@ -61,7 +67,7 @@ supervision = False # If True, perform deep supervision on given architecture
 
 test = False # State if model is being trained (False) or tested/validated (True)
 
-
+autocontext_iter = 2 # Autocontext iterations
 
 # Augmentation parameters
 
@@ -80,10 +86,6 @@ augm2D_probs = [0.5]*5
 # Cross-validation parameters
 
 k = 4 # Number of cross validation folds
-
-
-
-
 
 # Architecture parameters
 
@@ -108,6 +110,8 @@ padding = 1 # Padding for architecture
 num_layers = 3 # Number of encoder and decoder layers to be used
 
 #distance_layer = True # If True, use a layer with that computes distance maps as extra features at the end of the encoder 
+
+# RECHANGE FOLDER NAMES LATER WHEN WORKING AGAIN WITH HEROIC!!!
 
 if three_D or (not(three_D) and add3d > 0):
     
@@ -201,7 +205,7 @@ class_weights = [0.2,0.8]
 
 class_count = 2 # Classes used: foreground and background
 
-lr = 0.00001 # Learning rate
+lr = 0.000001 # Learning rate
 
 lr_scheduling = False # Can be step or exponential
 
@@ -212,7 +216,7 @@ lr_gamma = 0.5 # Decreasing factor for learning rate scheduling
 
 # Loss function parameters
 
-loss_fun = 'focal_supervision' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, focal_dice, tversky, focal_tversky, exp_log, center, focal_center, focal_supervision, bce or bce_dice loss
+loss_fun = 'focal' # Loss function type. Can be dice, generalized_dice, focal, focal_cc, focal_dice, tversky, focal_tversky, exp_log, center, focal_center, focal_supervision, bce or bce_dice loss
 
 loss_beta = 0.3
 
