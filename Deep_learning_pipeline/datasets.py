@@ -66,7 +66,13 @@ class QFlowDataset(data.Dataset):
 #        
     def __len__(self):
         
-        return len(self.img_paths)
+        if params.k > 1 or params.test:
+        
+            return len(self.img_paths)
+        
+        else:
+            
+            return len(self.img_paths[0])
     
     
     def readVTK(self, filename, order='F'):
@@ -253,11 +259,23 @@ class QFlowDataset(data.Dataset):
         
         coincide = 1 # Coincidence flag
         
-        raw_path = self.img_paths[index]
+        if params.k > 1 or params.test:
+        
+            raw_path = self.img_paths[index]
+            
+        else:
+            
+            raw_path = self.img_paths[0][index]
         
         if len(self.mask_paths) != 0:
+            
+            if params.k > 1 or params.test:
 
-            mask_path = self.mask_paths[index]
+                mask_path = self.mask_paths[index]
+                
+            else:
+                
+                mask_path = self.mask_paths[0][index]
         
             # Make sure that raw and mask files are coincident
         

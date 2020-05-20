@@ -450,7 +450,13 @@ class ExtractRawFiles:
             
             num_folder = float(dcm.AcquisitionNumber) # Acquisition number for the last image read in the folder. All images in the same folder have the same acquisition number
             
-            venc = dcm[0x2001101A].value[0]
+            if ('(2001, 101a)' in key_str):
+            
+                venc = dcm[0x2001101A].value[0]
+                
+            else:
+                
+                venc = 0
             
             return reformat_array, num_array, time_array, modal_array, instance_array, spacing, origin, num_folder, venc
 
@@ -467,6 +473,12 @@ class ExtractRawFiles:
             #key = 'QFLOW' # Key to look for folders with images
             
             patients = os.listdir(self.path)
+            
+            vencs = []
+            
+            times = []
+            
+            names = []
             
             for patient_folder in patients:
                 
@@ -490,7 +502,9 @@ class ExtractRawFiles:
                                 
                                 # Extract DICOM fields
                                 
-                                arrays_array, num_array, time_array, modal_array, _ , spacing, origin, _ = self.dicomFieldExtractor(image_path)
+                                arrays_array, num_array, time_array, modal_array, _ , spacing, origin, _, venc = self.dicomFieldExtractor(image_path)
+                                
+                                vencs.append(venc)
         
                                 num_unique = np.unique(num_array) # Array with unique acquisition numbers
 
@@ -520,18 +534,31 @@ class ExtractRawFiles:
                                         
                                         time_num_m_sort_ind = np.argsort(time_num_m) # Indexes of sorted time frames
                                         
+                                        time_sort = np.sort(time_num_m)
+                                        
                                         final_image = arrays_array[:,:,ind_num_m[time_num_m_sort_ind]] # Sorted final image
 
                                         # Structure of final filename: study + patient + right/left kidney + magnitude/phase/other + repeated acquisition
                                         
-                                        final_filename = study + '_' + patientID + '_' + orientation + '_' + m + '_' + str(cont_acq) + '.vtk'
+                                        final_filename = self.study + '_' + patientID + '_' + orientation + '_' + m + '_' + str(cont_acq) + '.vtk'
+                                        
                                         
                                         # Save as VTK file in provided destination folder
                                         
                                         self.array2vtk(final_image, final_filename, self.dest_path + '_' + m + '/', origin, spacing)
+                                    names.append(self.study + '_' + patientID + '_' + orientation + '_' + str(cont_acq))
                                              
-                                    cont_acq += 1  
-                                            
+                                    cont_acq += 1
+                                    
+                                    #times.append(time_sort[1] - time_sort[0])
+                                    
+                                    #vencs.append(venc)
+                                    
+                                    #np.savetxt(self.dest_path + 'filenames.txt', names, fmt = '%s')
+                                    
+                                    #np.savetxt(self.dest_path + 'times.txt', times)
+                                    
+                                    #np.savetxt(self.dest_path + 'vencs.txt', vencs)
                                             
         elif self.study == 'CKD2':
             

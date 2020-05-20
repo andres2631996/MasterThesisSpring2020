@@ -273,7 +273,7 @@ class ConvGRU(nn.Module):
         :param kernel_size: (int, int)
             Size of the convolutional kernel.
         :param num_layers: int
-            Number of ConvLSTM layers
+            Number of ConvGRU layers
         :param dtype: torch.cuda.FloatTensor or torch.FloatTensor
             Whether or not to use cuda.
         :param alexnet_path: str

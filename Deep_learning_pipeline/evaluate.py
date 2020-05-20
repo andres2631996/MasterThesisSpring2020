@@ -67,7 +67,7 @@ class Dice():
         
         denominator += float(torch.add(torch.sum(self.ground_truth), torch.sum(self.prediction)))
         
-        return (2*numerator/(denominator + 0.000000001))
+        return ((2*abs(numerator))/(abs(denominator) + 0.000000001))
    
 
 
@@ -338,7 +338,6 @@ def evaluate(net, loader, iteration, key):
             
             # Extracts the data from dataloader and puts it into the network
 
-            
             for i in range(min(math.ceil(ram_batch_size/batch_gpu_max), math.ceil(X.shape[0]/batch_gpu_max))):
                 
                 startIndiex = i*batch_gpu_max
@@ -370,9 +369,9 @@ def evaluate(net, loader, iteration, key):
                 
                 if key == 'test':
                     
-                    #output = utilities.connectedComponentsPostProcessing(output)
+                    if not('Scale' in params.architecture):
                     
-                    output = torch.argmax(output, 1).cuda()
+                        output = torch.argmax(output, 1).cuda()
                     
                     if params.add3d == 0:
 
@@ -398,7 +397,9 @@ def evaluate(net, loader, iteration, key):
                     
                 else:
                     
-                    output = torch.argmax(output, 1).cuda() #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
+                    if not('Scale' in params.architecture):
+                    
+                        output = torch.argmax(output, 1).cuda() #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
                     
                 if len(Y) != 0:
                 

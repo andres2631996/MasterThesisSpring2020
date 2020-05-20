@@ -123,7 +123,7 @@ def DiceBCEloss(output, target):
     return bce_loss + diceLoss
 
 
-def generalized_dice_loss(output, target):
+def generalized_dice_loss(output, target, centers = None, diffs = None):
     
     """
     Computes Generalized Dice loss.
@@ -144,13 +144,35 @@ def generalized_dice_loss(output, target):
     
     target_array = target.cpu().numpy()
     
-    # Target dilation
+    if centers is not None and diffs is not None:
+        
+        cropped_target = []
+        
+        if len(target_array.shape) == 3:
+        
+            for i in range(target_array.shape[0]):
+
+                cropped_target.append(target_array[i, centers[i][0] - diffs[i][0]: centers[i][0] + diffs[i][1], centers[i][1] - diffs[i][2]: centers[i][1] + diffs[i][3]])
+                
+        elif len(target_array.shape) == 4:
+        
+            for i in range(target.shape[0]):
+
+                cropped_target.append(target_array[i, centers[i][0] - diffs[i][0]: centers[i][0] + diffs[i][1], centers[i][1] - diffs[i][2]: centers[i][1] + diffs[i][3],:])
+                
+        cropped_target_array = np.array(cropped_target)
+        
+        cropped_target = torch.from_numpy(cropped_target_array).cuda()
+        
+    else:
     
-    dilated_target = binary_dilation(target_array, iterations = 2)
-    
-    # Weight map calculation
-    
-    weight_map = 1 + dilated_target - target_array
+        # Target dilation
+
+        dilated_target = binary_dilation(target_array, iterations = 2)
+
+        # Weight map calculation
+
+        weight_map = 1 + dilated_target - target_array
     
     ind_to_correct = np.where(weight_map == 2)
     
@@ -163,8 +185,14 @@ def generalized_dice_loss(output, target):
     output_softmax = output_softmax[:,1]
     
     weighted_output = torch.mul(torch.tensor(weight_map).cuda(), output_softmax)
+    
+    if centers is None and diffs is None:
 
-    dice = dice_loss(weighted_output, target)
+        dice = dice_loss(weighted_output, target)
+        
+    else:
+ 
+        dice = dice_loss(weighted_output, cropped_target)
     
     return dice
 
@@ -352,6 +380,12 @@ def focal_loss(output, target, centers = None, diffs = None, weights=None, size_
 
                 cropped_target.append(target[i, centers[i][0] - diffs[i][0]: centers[i][0] + diffs[i][1], centers[i][1] - diffs[i][2]: centers[i][1] + diffs[i][3]])
                 
+        elif len(target.shape) == 4:
+        
+            for i in range(target.shape[0]):
+
+                cropped_target.append(target[i, centers[i][0] - diffs[i][0]: centers[i][0] + diffs[i][1], centers[i][1] - diffs[i][2]: centers[i][1] + diffs[i][3],:])
+                
         cropped_target_array = np.array(cropped_target)
         
         cropped_target = torch.from_numpy(cropped_target_array).cuda()
@@ -408,6 +442,36 @@ def focal_supervision_loss(output, target, centers = None, diffs = None):
         for i in range(len(output)):
 
             loss += focal_loss(output[i], target, centers = centers, diffs = diffs)
+        
+    return loss
+
+
+def dice_supervision_loss(output, target, centers = None, diffs = None):
+    
+    """
+    Weighted-Dice loss for deep supervision. It takes into account not only the output of the final model layer, but also from intermediate layers
+    
+    Params:
+    
+        - output: list of outputs ordered from last to first layer to be analyzed
+        
+        - target: ground-truth
+    
+    """
+    
+    loss = 0
+    
+    if centers is None and diffs is None:
+    
+        for i in range(len(output)):
+
+            loss += generalized_dice_loss(output[i], target)
+            
+    else:
+        
+        for i in range(len(output)):
+
+            loss += generalized_dice_loss(output[i], target, centers = centers, diffs = diffs)
         
     return loss
 
@@ -906,6 +970,25 @@ def connectedComponentsPostProcessing(x):
     return out
 
 
+def outputDilation(output):
+    
+    """
+    Post-processing step to dilate an output tensor. Compensate under-segmentations
+    
+    Params:
+    
+        - output: binary array to process
+        
+        
+    Outpus:
+    
+        - dilated: dilated array
+    
+    """
+    
+    dilated = binary_dilation(output)
+    
+    return dilated
 
 
 def padDifference(center, orig_shape, desired_shape):
@@ -933,7 +1016,7 @@ def padDifference(center, orig_shape, desired_shape):
     
     pad_x_up = center[0] - desired_shape[0]//2
                     
-    pad_x_down = orig_shape[-2] - desired_shape[0]//2 - center[0]
+    pad_x_down = orig_shape[2] - desired_shape[0]//2 - center[0]
 
     diff_x_up = desired_shape[0]//2
 
@@ -945,16 +1028,16 @@ def padDifference(center, orig_shape, desired_shape):
 
         diff_x_up = center[0]
 
-    elif (center[0] + desired_shape[0]//2) > orig_shape[-2]:
+    elif (center[0] + desired_shape[0]//2) > orig_shape[2]:
 
         pad_x_down = 0
 
-        diff_x_down = orig_shape[-2] - center[0]
+        diff_x_down = orig_shape[2] - center[0]
         
     
     pad_y_left = center[1] - desired_shape[1]//2
                     
-    pad_y_right = orig_shape[-1] - desired_shape[1]//2 - center[1]
+    pad_y_right = orig_shape[3] - desired_shape[1]//2 - center[1]
 
     diff_y_left = desired_shape[1]//2
 
@@ -966,11 +1049,11 @@ def padDifference(center, orig_shape, desired_shape):
 
         diff_y_left = center[1]
 
-    elif (center[1] + desired_shape[1]//2) > orig_shape[-1]:
+    elif (center[1] + desired_shape[1]//2) > orig_shape[3]:
 
         pad_y_right = 0
 
-        diff_y_right = orig_shape[-1] - center[1]
+        diff_y_right = orig_shape[3] - center[1]
 
     pads = [pad_x_up, pad_x_down, pad_y_left, pad_y_right]
     
@@ -1119,7 +1202,7 @@ def connectedComponentsModule(x, inp):
 
                 ind_label = np.array(np.where(labels == label)) # Spatial coordinates of the same connected component
                 
-                center_component = [np.median(ind_label[0].flatten()), np.median(ind_label[1].flatten()), np.median(ind_label[2].flatten())]
+                center_component = [int(np.median(ind_label[0].flatten())), int(np.median(ind_label[1].flatten())), int(np.median(ind_label[2].flatten()))]
 
                 # Extract the mean value of each connected component
                 
@@ -1144,13 +1227,14 @@ def connectedComponentsModule(x, inp):
                 
                 # Cropping
                 
-                pad, diff = padDifference(final_center, x.shape, [32,32])
+                pad, diff = padDifference(final_center, x.shape, [32,32,x.shape[-1]])
                 
                 pad_values.append(pad)
                 
                 diff_values.append(diff)
                 
-                out.append(binary_array[i,final_center[0]-diff[0]:final_center[0]+diff[1], final_center[1]-diff[2]:final_center[1]+diff[3],:])
+                out.append(binary_array[i,(final_center[0]-diff[0]):(final_center[0]+diff[1]), (final_center[1]-diff[2]):(final_center[1]+diff[3]),:])
+
                 
                 for c in range(inp.shape[1]):
 
@@ -1160,9 +1244,9 @@ def connectedComponentsModule(x, inp):
                         
                     #else:
                         
-                    x_out.append(inp_array[i,c,final_center[0]-diff[0]:final_center[0]+diff[1], final_center[1]-diff[2]:final_center[1]+diff[3],:])
-                        
-                        
+                    x_out.append(inp_array[i,c,(final_center[0]-diff[0]):(final_center[0]+diff[1]), (final_center[1]-diff[2]):(final_center[1]+diff[3]),:])
+                    
+                  
     out = np.array(out)
     
     x_out = np.array(x_out)
@@ -1209,7 +1293,7 @@ def padding(x, pad_list):
 
         for i in range(x_array.shape[0]):
 
-            out.append(np.pad(binary_array[i,:,:,:], ((pad_list[i][0], pad_list[i][1]),(pad_list[i][-2], pad_list[i][-1]))))
+            out.append(np.pad(binary_array[i,:,:,:], ((pad_list[i][0], pad_list[i][1]),(pad_list[i][-2], pad_list[i][-1]),(0,0))))
             
     out = np.array(out)
             

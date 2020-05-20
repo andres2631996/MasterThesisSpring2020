@@ -399,48 +399,54 @@ class StratKFold:
 
         all_patients = list(itertools.chain.from_iterable(all_patients))
         
-        patients, labels = self.stratification(all_patients, all_flows)
+        if self.k > 1:
         
-        patients_sort = np.sort(np.array(patients))
+            patients, labels = self.stratification(all_patients, all_flows)
+
+            patients_sort = np.sort(np.array(patients))
+
+            l_array = np.array(labels)
+
+            labels_sort = l_array[np.argsort(np.array(patients))]
+
+            # Sort patients and flows according to their value
+
+            val_lists = self.StratifiedKFoldPatients(patients_sort, labels_sort)
+
+            # Repeat patients in each fold from minority studies
+
+            if self.rep:
+
+                for val_list in val_lists:
+
+                    ind_hero = [i for i,s in enumerate(val_list) if 'hero' in s]
+
+                    ind_extr = [i for i,s in enumerate(val_list) if 'extr' in s]
+
+                    if len(ind_hero) != 0:
+
+                        for ind_h in ind_hero:
+
+                            for i in range(3):
+
+                                val_list.append(val_list[ind_h])
+
+
+                    if len(ind_extr) != 0:
+
+                        for ind_e in ind_extr:
+
+                            for i in range(5):
+
+                                val_list.append(val_list[ind_e])
+
+                    random.shuffle(val_list)
         
-        l_array = np.array(labels)
+            return val_lists, test_images, test_flows
         
-        labels_sort = l_array[np.argsort(np.array(patients))]
-           
-        # Sort patients and flows according to their value
+        else:
             
-        val_lists = self.StratifiedKFoldPatients(patients_sort, labels_sort)
-        
-        # Repeat patients in each fold from minority studies
-        
-        if self.rep:
-            
-            for val_list in val_lists:
-                
-                ind_hero = [i for i,s in enumerate(val_list) if 'hero' in s]
-                
-                ind_extr = [i for i,s in enumerate(val_list) if 'extr' in s]
-                
-                if len(ind_hero) != 0:
-                    
-                    for ind_h in ind_hero:
-                        
-                        for i in range(3):
-                            
-                            val_list.append(val_list[ind_h])
-                
-                
-                if len(ind_extr) != 0:
-                    
-                    for ind_e in ind_extr:
-                        
-                        for i in range(5):
-                            
-                            val_list.append(val_list[ind_e])
-        
-                random.shuffle(val_list)
-        
-        return val_lists, test_images, test_flows
+            return [all_patients], test_images, test_flows
             
     
 # Test code

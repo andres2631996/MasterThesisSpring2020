@@ -194,13 +194,25 @@ def lossSelection(output, Y, i, centers = None, diffs = None):
         
     elif params.loss_fun == 'focal_supervision':
         
-        if params.architecture == "NestedUNet2dScale":
+        if 'Scale' in params.architecture:
             
             loss = utilities.focal_supervision_loss(output, Y.cuda(non_blocking=True), centers, diffs)
    
         else:
         
             loss = utilities.focal_supervision_loss(output, Y.cuda(non_blocking=True))
+        
+        found = 1
+        
+    elif params.loss_fun == 'dice_supervision':
+        
+        if 'Scale' in params.architecture:
+            
+            loss = utilities.dice_supervision_loss(output, Y.cuda(non_blocking=True), centers, diffs)
+   
+        else:
+        
+            loss = utilities.dice_supervision_loss(output, Y.cuda(non_blocking=True))
         
         found = 1
         
@@ -393,7 +405,7 @@ def train(net, loader_train, loader_val = None, k = 0):
                             
                     #Send sample(s) through the net
                     
-                    if params.architecture != "NestedUNet2dScale":
+                    if not('Scale' in params.architecture):
                     
                         output = net(Xpart.cuda(non_blocking=True))
                         
@@ -406,7 +418,7 @@ def train(net, loader_train, loader_val = None, k = 0):
                         params.test = False
                         
                         output, centers, diffs, pads = net(Xpart.cuda(non_blocking=True))
-                        
+
                     #out = torch.argmax(output[0],1).cpu().detach().numpy()
                     
                     #pad = np.pad(out[0,:,:],((pads[0][0], pads[0][1]),(pads[0][2], pads[0][3])))
@@ -444,7 +456,7 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                 # Loss printing
                 
-                if params.loss_frequency != -1 and loader_val != None and i % params.loss_frequency in range(batch_size) and i not in range(batch_size):
+                if params.loss_frequency != -1 and i % params.loss_frequency in range(batch_size) and i not in range(batch_size):
 
                     print("Training iteration {}: loss: {} +- {}\n".format(i, np.mean(losses[-params.loss_frequency:-1]), np.std(losses[-params.loss_frequency:-1])))
    
@@ -462,51 +474,52 @@ def train(net, loader_train, loader_val = None, k = 0):
                     
                     net, optimizer, cont_load, prev_dice = checkpointLoading(net, optimizer, k)
                     
-                    
                 
-                if (params.eval_frequency != -1 and loader_val != None and i % params.eval_frequency in range(batch_size) and i not in range(batch_size)) or (i == params.I - 1):
-                    
-                    #Evaluate a series of metrics at this point in training
-                    
-                    #results_train = evaluate.evaluate(net, loader_train, i)
-                    
-                    results_eval = evaluate.evaluate(net, loader_val, i, 'val')
-                    
-                    params.test = False
+                if loader_val != None:
+                
+                    if (params.eval_frequency != -1 and i % params.eval_frequency in range(batch_size) and i not in range(batch_size)) or (i == params.I - 1):
 
-                    eval_metrics.append(results_eval)
-                    
-                    #train_metrics.append(results_train)
-                    
-                    it.append(i)
-                    
-                    net.train(True)
-                    
-                    new_dice = float(results_eval[0][1][:-1])
-                    
-                    # Save the model if the validation score increases with respect to previous iterations
-                        
-                    if new_dice > prev_dice:
-                        
-                        state = {'iteration': i + 1, 'state_dict': net.state_dict(),
-                                 'optimizer': optimizer.state_dict(), 'loss': loss, 
-                                 'best_dice': new_dice}
-                    
-                        filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
-                        
-                        torch.save(state, params.network_data_path + filename)
-                        
-                        print('Saved model\n')
-                    
-                        prev_dice = new_dice
-                    
-                    
-                    for l in range(len(results_eval)):
-                        
-                        print("Validation {}: {} +- {}\n".
-                              format(results_eval[l][0], results_eval[l][1], results_eval[l][2]))
+                        #Evaluate a series of metrics at this point in training
 
-                    print("Elapsed training time: {}\n".format(time.time() - start_time))
+                        #results_train = evaluate.evaluate(net, loader_train, i)
+
+                        results_eval = evaluate.evaluate(net, loader_val, i, 'val')
+
+                        params.test = False
+
+                        eval_metrics.append(results_eval)
+
+                        #train_metrics.append(results_train)
+
+                        it.append(i)
+
+                        net.train(True)
+
+                        new_dice = float(results_eval[0][1][:-1])
+
+                        # Save the model if the validation score increases with respect to previous iterations
+
+                        if new_dice > prev_dice:
+
+                            state = {'iteration': i + 1, 'state_dict': net.state_dict(),
+                                     'optimizer': optimizer.state_dict(), 'loss': loss, 
+                                     'best_dice': new_dice}
+
+                            filename = 'trainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar' 
+
+                            torch.save(state, params.network_data_path + filename)
+
+                            print('Saved model\n')
+
+                            prev_dice = new_dice
+
+
+                        for l in range(len(results_eval)):
+
+                            print("Validation {}: {} +- {}\n".
+                                  format(results_eval[l][0], results_eval[l][1], results_eval[l][2]))
+
+                        print("Elapsed training time: {}\n".format(time.time() - start_time))
       
 
 
@@ -555,8 +568,10 @@ def train(net, loader_train, loader_val = None, k = 0):
                 #net.cuda()
 
     # Remove one dimension from lists of results
+    
+    if loader_val is not None:
 
-    eval_metrics = list(itertools.chain.from_iterable(eval_metrics))
+        eval_metrics = list(itertools.chain.from_iterable(eval_metrics))
 
     
     print("Elapsed training time: {}".format(time.time() - start_time))
@@ -589,63 +604,68 @@ def train(net, loader_train, loader_val = None, k = 0):
     
     # Metrics
     
-    # Set metric lists to array
+    if loader_val is not None:
     
-    eval_metrics_array = np.array(eval_metrics)
+        # Set metric lists to array
+
+        eval_metrics_array = np.array(eval_metrics)
 
 
-    
-    # Save evaluation and training metrics to TXT files
-    
-    np.savetxt(params.network_data_path + 'ValidationMetrics_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '.txt', eval_metrics_array, fmt = '%s')
-  
-    # Get unique metrics names
-    
-    metrics_unique = np.unique(eval_metrics_array[:,0])
-    
-    # Apply a for loop for each metric type
-    
-    for metric_name in metrics_unique:
-        
-        metric_name = str(metric_name)
-        
-        ind_metric = np.where(eval_metrics_array[:,0] == metric_name)[0]
-        
-        mean_metric_eval = eval_metrics_array[ind_metric,1]
-        
-        std_metric_eval = eval_metrics_array[ind_metric,2]
 
-        
-        m_metric_eval = []
-        
-        s_metric_eval = []
-        
-        for i in range(len(mean_metric_eval)):
-            
-            m_metric_eval.append(float(mean_metric_eval[i][:-1]))
-            
-            s_metric_eval.append(float(std_metric_eval[i][:-1]))
-        
-        
+        # Save evaluation and training metrics to TXT files
 
-        fig = plt.figure(figsize = (13,5))
-        
-        plt.errorbar(it, m_metric_eval, yerr =  s_metric_eval, color = 'r', label = 'Validation')
-        
-        plt.xlabel('Iterations'), plt.ylabel(metric_name)
-        
-        plt.title('Evolution of ' + metric_name + ' fold ' + str(k))
-        
-        plt.legend()
-        
-        fig.savefig(params.network_data_path + '/' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_' + metric_name + '.png')
-        
-        # Average result appending
-        
-        overall_results_val.append(m_metric_eval[-1])
-        
-        overall_results_val.append(s_metric_eval[-1])
+        np.savetxt(params.network_data_path + 'ValidationMetrics_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '.txt', eval_metrics_array, fmt = '%s')
 
+        # Get unique metrics names
+
+        metrics_unique = np.unique(eval_metrics_array[:,0])
+
+        # Apply a for loop for each metric type
+
+        for metric_name in metrics_unique:
+
+            metric_name = str(metric_name)
+
+            ind_metric = np.where(eval_metrics_array[:,0] == metric_name)[0]
+
+            mean_metric_eval = eval_metrics_array[ind_metric,1]
+
+            std_metric_eval = eval_metrics_array[ind_metric,2]
+
+
+            m_metric_eval = []
+
+            s_metric_eval = []
+
+            for i in range(len(mean_metric_eval)):
+
+                m_metric_eval.append(float(mean_metric_eval[i][:-1]))
+
+                s_metric_eval.append(float(std_metric_eval[i][:-1]))
+
+
+
+            fig = plt.figure(figsize = (13,5))
+
+            plt.errorbar(it, m_metric_eval, yerr =  s_metric_eval, color = 'r', label = 'Validation')
+
+            plt.xlabel('Iterations'), plt.ylabel(metric_name)
+
+            plt.title('Evolution of ' + metric_name + ' fold ' + str(k))
+
+            plt.legend()
+
+            fig.savefig(params.network_data_path + '/' + 'trainedWith' + params.train_with + '_' + params.prep_step + '_fold_' + str(k) + '_' + metric_name + '.png')
+
+            # Average result appending
+
+            overall_results_val.append(m_metric_eval[-1])
+
+            overall_results_val.append(s_metric_eval[-1])
+
+    else:
+        
+        overall_results_val = None
     
     return np.mean(losses[-params.eval_frequency:-1]), np.std(losses[-params.eval_frequency:-1]), overall_results_val, net.state_dict(), optimizer, optimizer.state_dict()
 

@@ -77,8 +77,7 @@ def preprocessingType(preprocessing):
     
     
     else:
-
-
+        
         if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
 
             start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/'
@@ -94,7 +93,8 @@ def preprocessingType(preprocessing):
         else:
 
             print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
-    
+
+        
     return start_folder
 
 
@@ -237,7 +237,7 @@ def extractVTKfilesStratification(patient_paths):
                     
                         if modality == 'mag':
                             
-                            raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
+                            raw_path.append([modality_path + item for item in images if not('sum' in item) and (not('mip' in item))])
 
                     
                     elif params.train_with == 'pha':
@@ -405,7 +405,8 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
         if K == 1:
             
                 
-            print("Creating final network. No validation.")
+            print("Creating final network. No validation\n")
+    
             
             loader_train = torch.utils.data.DataLoader(train_dataset,
                                                        num_workers=0, #4 Slave Processes for fetching data
@@ -538,31 +539,31 @@ def resultPrint(losses, val_results):
     fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
     
     
-    
+    if val_results is not None:
         
-    for i in range(len(params.metrics)):
-        
-        mean_val = np.mean(val_results[:,0,i].flatten())
-    
-        std_val = np.std(val_results[:,0,i].flatten())
-        
-        print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
-        
-        # Show in figures cross-validation results, too
-        
-        # Results for validation
-        
-        fig = plt.figure(figsize = (13,5))
-    
-        plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
-        
-        plt.title(str(params.metrics[i]) + ' over validation folds')
-        
-        plt.xlabel('Fold number')
-        
-        plt.ylabel(str(params.metrics[i]))
-        
-        fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+        for i in range(len(params.metrics)):
+
+            mean_val = np.mean(val_results[:,0,i].flatten())
+
+            std_val = np.std(val_results[:,0,i].flatten())
+
+            print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
+
+            # Show in figures cross-validation results, too
+
+            # Results for validation
+
+            fig = plt.figure(figsize = (13,5))
+
+            plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
+
+            plt.title(str(params.metrics[i]) + ' over validation folds')
+
+            plt.xlabel('Fold number')
+
+            plt.ylabel(str(params.metrics[i]))
+
+            fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
 
 
 
@@ -641,8 +642,8 @@ for k in range(K):
         
     elif params.architecture == "UNet_with_ResidualsFourLayers":
         
-            net = models.UNet_with_ResidualsFourLayers().cuda()
-            
+        net = models.UNet_with_ResidualsFourLayers().cuda()
+        
     elif params.architecture == "AttentionUNet":
         
             net = models.AttentionUNet().cuda()
@@ -667,13 +668,68 @@ for k in range(K):
         
         net = models.NestedUNet2d().cuda()
         
+    elif params.architecture == "NestedUNet2dTime":
+        
+        net = models.NestedUNet2dTime().cuda()
+        
     elif params.architecture == "NestedUNet2dAutocontext":
         
         net = models.NestedUNet2dAutocontext().cuda()
         
+    elif params.architecture == "NestedUNet2dTimeAutocontext":
+        
+        net = models.NestedUNet2dTimeAutocontext().cuda()
+        
+    elif params.architecture == "NestedUNet2dScale":
+        
+        net = models.NestedUNet2dScale().cuda()
+        
+    elif params.architecture == "AttentionUNetScale":
+        
+        net = models.AttentionUNetScale().cuda()
+        
+    elif params.architecture == "AttentionUNetAutocontext":
+        
+        net = models.AttentionUNetAutocontext().cuda()
+        
+    elif params.architecture == "AttentionUNetMemory":
+        
+        net = models.AttentionUNetMemory().cuda()
+        
+    elif params.architecture == "NestedUNet2dMemory":
+        
+        net = models.NestedUNet2dMemory().cuda()
+        
+    elif params.architecture == "NestedUNet2dTimeScale":
+        
+        net = models.NestedUNet2dTimeScale().cuda()
+        
+    elif params.architecture == "NestedUNet2dTimeMemory":
+        
+        net = models.NestedUNet2dTimeMemory().cuda()
+        
+    elif params.architecture == "TimeDistributedAttentionUNetAutocontext":
+        
+        net = models.TimeDistributedAttentionUNetAutocontext().cuda()
+        
+    elif params.architecture == "TimeDistributedUNetAutocontext":
+        
+        net = models.TimeDistributedUNetAutocontext().cuda()
+
+    elif params.architecture == "TimeDistributedUNetMemory":
+
+        net = models.TimeDistributedUNetMemory().cuda()
+
+    elif params.architecture == "TimeDistributedUNetScale":
+
+        net = models.TimeDistributedUNetScale().cuda()
+        
+    elif params.architecture == "kUNetGRU":
+
+        net = models.kUNetGRU().cuda()
+        
         # MORE MODELS TO COME!!!        
-        #    elif params.arch_type == "VGG11":
-        #        net = UNet11(channel_count=no_channels, pre_trained=True).cuda()
+
         
     else:
         
@@ -690,16 +746,24 @@ for k in range(K):
     if params.xav_init == 1:
         
         net.apply(weights_init)
+        
     
+    if params.k > 1:
     
-    train_raw_path, train_mask_path, val_raw_path, val_mask_path, train_patients, val_patients = pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths)
+        train_raw_path, train_mask_path, val_raw_path, val_mask_path, train_patients, val_patients = pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths)
     
             
     # Training and validation data loaders
+    
+    if params.k > 1:
 
-    loader_train, loader_val = get_data_loader(train_raw_path, train_mask_path, k, K, 
-                                                data_path, val_raw_path, val_mask_path, 
-                                                train_patients, val_patients)
+        loader_train, loader_val = get_data_loader(train_raw_path, train_mask_path, k, K, 
+                                                    data_path, val_raw_path, val_mask_path, 
+                                                    train_patients, val_patients)
+        
+    else:
+        
+        loader_train, loader_val = get_data_loader(r_paths, m_paths, k, params.k, data_path,[],[],[],[])
     
     
     # Train and evaluate
@@ -717,15 +781,21 @@ for k in range(K):
     
     losses_std.append(loss_std)
     
-    cont_val_result = 0
+    if metrics_val is not None:
     
-    for i in range(len(params.metrics)):
+        cont_val_result = 0
+
+        for i in range(len(params.metrics)):
+
+            # Store arrays with mean and standard deviation results
+
+            metrics_val_array[k,:,i] = np.array([metrics_val[cont_val_result], metrics_val[cont_val_result + 1]])
+
+            cont_val_result += 2
+            
+    else:
         
-        # Store arrays with mean and standard deviation results
-        
-        metrics_val_array[k,:,i] = np.array([metrics_val[cont_val_result], metrics_val[cont_val_result + 1]])
-        
-        cont_val_result += 2
+        metrics_val_array = None
     
     # Prints time estimate
      
@@ -741,7 +811,6 @@ for k in range(K):
     print("Estimated time of Arrival: ", ETA)  
 
 resultPrint(losses, metrics_val_array) # Final cross-validation result display
-
 # Print cross-validation results and show figures
         
 
