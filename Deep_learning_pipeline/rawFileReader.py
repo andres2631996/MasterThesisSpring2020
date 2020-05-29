@@ -612,26 +612,29 @@ class ExtractRawFiles:
                                 #print('Saving as VTK files with relevant information extracted from DICOM files\n')
 
                                 for m in mod_unique:
-
-                                    # Images from same modality and same acquisition number
-
-                                    # Get index of these images in overall array
-
-                                    ind_m = np.array(np.where(mod_array == m))[0] # Indexes of images of same modality
-
-                                    time_m = time_array[ind_m] # Time values for same modality and same acquisition number
-
-                                    time_m_sort_ind = np.argsort(time_m) # Indexes of sorted time frames
-
-                                    final_image = arrays_array[:,:,ind_m[time_m_sort_ind]] # Sorted final image
                                     
-                                    #final_image = self.pipeline2(final_image,m)
+                                    if m == 'oth':
 
-                                    # Structure of final filename: study + patient + right/left kidney + magnitude/phase/other + repeated acquisition
+                                        # Images from same modality and same acquisition number
 
-                                    final_filename = self.study + '_' + patientID + '_' + orientation + '_' + m + rep + '.vtk'
+                                        # Get index of these images in overall array
 
-                                    self.array2vtk(final_image, final_filename, self.dest_path + '_' + m + '/', origin, spacing)
+                                        ind_m = np.array(np.where(mod_array == m))[0] # Indexes of images of same modality
+
+                                        time_m = time_array[ind_m] # Time values for same modality and same acquisition number
+
+                                        time_m_sort_ind = np.argsort(time_m) # Indexes of sorted time frames
+
+                                        final_image = arrays_array[:,:,ind_m[time_m_sort_ind]] # Sorted final image
+
+                                        #final_image = self.pipeline2(final_image,m)
+
+                                        # Structure of final filename: study + patient + right/left kidney + magnitude/phase/other + repeated acquisition
+
+                                        final_filename = self.study + '_' + patientID + '_' + orientation + '_' + m + rep + '.vtk'
+
+                                        self.array2vtk(final_image, final_filename, self.dest_path + '_' + m + '/', origin, spacing)
+                                        
 
                                                 
                                                     

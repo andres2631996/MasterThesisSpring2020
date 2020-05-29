@@ -191,6 +191,18 @@ def extractVTKfilesStratification(patient_paths):
         # Access 3D VTK files
         
         patient_paths[cont] = [preprocessingType(params.prep_step) + path for path in fold]
+        
+        # Split in case of working with 'oth' modality
+        
+        if '_oth' in params.train_with:
+            
+            splitting = params.train_with.split('_')
+            
+            primary = splitting[0]
+            
+        else:
+            
+            primary = ''
     
         for patient_path in patient_paths[cont]: # Look for all images in the given paths
             
@@ -200,17 +212,29 @@ def extractVTKfilesStratification(patient_paths):
             
                 if 'both' in params.train_with:
                     
-                    if params.train_with == 'bothBF':
+                    if params.train_with == 'bothBF' or primary == 'bothBF':
                         
                         ind_raw = [i for i,s in enumerate(images) if 'magBF' in s]
                     
-                    elif params.train_with == 'both':
+                    elif params.train_with == 'both' or primary == 'both':
                         
                         ind_raw = [i for i,s in enumerate(images) if 'mag_' in s]
                 
                 else:
                     
-                    ind_raw = [i for i,s in enumerate(images) if params.train_with in s]
+                    if not('_oth' in params.train_with):
+                    
+                        ind_raw = [i for i,s in enumerate(images) if params.train_with in s]
+                        
+                    else:
+                        
+                        if primary == 'mag':
+                            
+                            ind_raw = [i for i,s in enumerate(images) if 'mag_' in s]
+                            
+                        else:
+                            
+                            ind_raw = [i for i,s in enumerate(images) if primary in s]
                     
                 ind_msk = [i for i,s in enumerate(images) if 'msk' in s]
                 
@@ -233,14 +257,14 @@ def extractVTKfilesStratification(patient_paths):
                     
                     images = sorted(os.listdir(modality_path))
                     
-                    if params.train_with == 'mag_': 
+                    if params.train_with == 'mag_' or primary == 'mag': 
                     
                         if modality == 'mag':
                             
                             raw_path.append([modality_path + item for item in images if not('sum' in item) and (not('mip' in item))])
 
                     
-                    elif params.train_with == 'pha':
+                    elif params.train_with == 'pha' or primary == 'pha':
                         
                         if modality == 'pha':
                             
@@ -248,21 +272,21 @@ def extractVTKfilesStratification(patient_paths):
 
 
                     
-                    elif params.train_with == 'magBF':
+                    elif params.train_with == 'magBF' or primary == 'magBF':
                         
                         if modality == 'magBF':
                             
                             raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
 
                     
-                    elif params.train_with == 'both':
+                    elif params.train_with == 'both' or primary == 'both':
                         
                         if modality == 'mag':
                             
                             raw_path.append([modality_path + item for item in images if (not('sum' in item)) and (not('mip' in item))])
 
                         
-                    elif params.train_with == 'bothBF':
+                    elif params.train_with == 'bothBF' or primary == 'bothBF':
                         
                         if modality == 'magBF':
                             

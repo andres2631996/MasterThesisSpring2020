@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Feb 11 08:35:58 2020
+
+@author: andres
+"""
+
+import numpy as np
+
+import scipy
+
+import os
+
+import matplotlib.pyplot as plt
+
+from sklearn import linear_model
+
+from sklearn.metrics import mean_squared_error, r2_score
+
+import statsmodels.api as sm
+
+
+
+# Code to deal with statistics in data post-processing
+
+def t_test(result, reference):
+    
+    """
+    Compute the t statistic and p-value given the flow results from the neural
+    network and the reference results from Segment.
+    
+    Params:
+        - result: 1D array with flow results from neural network segmentation
+        - reference: 1D array with reference flow results from software Segment
+    
+    Returns:
+        - t_statistic and p_value
+    
+    """
+    
+    # Check that result and reference are 1D and that they have the same length
+    
+    print('\nChecking that result and reference are 1D and that they have the same length\n')
+    
+    if (len(result.shape) == 1) and (len(reference.shape) == 1):
+        
+        if len(result) == len(reference):
+            
+            print('Performing t test\n')
+    
+            t_stat, p_value = scipy.stats.ttest_ind(result, reference)
+            
+            print('t test completed successfully!\n')
+            
+            print('t statistic: {} // p value: {}'.format(t_stat, p_value))
+            
+            return t_stat, p_value
+        
+        else:
+            
+            print('Result and reference vectors do not have the same length. Please input them so that they have the same length')
+        
+    else:
+        
+        print('Result or reference vectors are not 1D. Please reformat them to be 1D')
+        
+        
+
+
+def wilcoxon_test(result, reference):
+    
+    """
+    Compute the sum of rank differences and p-value given the flow results 
+    from the neural network and the reference results from Segment.
+    
+    Params:
+        - result: 1D array with flow results from neural network segmentation
+        - reference: 1D array with reference flow results from software Segment
+    
+    Returns:
+        - sum and p_value
+    
+    """
+    
+    print('\nChecking that result and reference are 1D and that they have the same length\n')
+    
+    if (len(result.shape) == 1) and (len(reference.shape) == 1):
+        
+        if len(result) == len(reference):
+            
+            print('Performing Wilcoxon test\n')
+            
+            s, p_value = scipy.stats.wilcoxon(result, reference)
+            
+            print('Wilcoxon test completed successfully!\n')
+            
+            print('Sum of rank differences: {} // p value: {}'.format(s, p_value))
+    
+            return s, p_value
+        
+        else:
+            
+            print('Result and reference vectors do not have the same length. Please input them so that they have the same length')
+        
+    else:
+        
+        print('Result or reference vectors are not 1D. Please reformat them to be 1D')
+        
+        
+
+def figure_saving(dest_path, filename, figure):
+    
+    """
+    Saves figure in specified folder with a given file name
+    
+    Params:
+        
+        - dest_path: destination folder
+        
+        - filename: given filename (must be .png)
+        
+        - figure: given figure from Matplotlib
+    
+    """
+    
+    print('Checking that a destination path has been given\n')
+    
+    if dest_path is not None:
+        
+        if filename[-3:] == 'png' or filename[-3:] == 'PNG':
+                        
+            print('Saving figure as PNG in: {}'.format(dest_path))
+            
+            # Check that folder exists. Otherwise, create it
+            
+            print('\nChecking if folder exists\n')
+            
+            exist = os.path.isdir(dest_path)
+            
+            if not exist:
+                
+                os.makedirs(dest_path)
+                
+                print('Non existing folder. Created\n')
+                
+            # Checking if file exists
+            
+            files = os.listdir(dest_path)
+    
+            if filename in files:
+                
+                inp = input('File already exists. Do you want to overwrite or rename or abort? [o/r/a]:')
+                
+                if (inp == 'o') or (inp == 'O'):
+                    
+                    figure.savefig(dest_path + filename)
+                
+                elif (inp == 'r') or (inp == 'R'):
+                    
+                    cont = 0 # Filename counter
+                    
+                    while (filename in files):
+                        
+                        filename = filename[:-4] + '_' + str(cont) + '.png'
+                        
+                        cont += 1
+                    
+                    figure.savefig(dest_path + filename)
+                    
+                    print('Figure successfully saved as PNG in {} after file renaming'.format(dest_path))
+                
+                else:
+                    
+                    print('Operation aborted\n')
+            else:
+        
+                figure.savefig(dest_path + filename)
+            
+                print('Figure successfully saved as PNG in {}'.format(dest_path))
+            
+        else:
+            
+            print('Filename given was not PNG. Please specify a PNG filename')
+    
+    else:
+        
+        print('Tried to save figure as PNG, but folder has not been specified')
+
+
+
+def linear_regression_test(result, reference, plotting = True, save = False, dest_path = os.getcwd() + '/', filename = 'regression_plot.png'):
+    
+    """
+    Compute a scatter plot with points and with linear regression equation
+    given the flow results from the neural network and the reference results 
+    from Segment.
+    
+    Params:
+        - result: 1D array with flow results from neural network segmentation
+        - reference: 1D array with reference flow results from software Segment
+        - plotting: flag to state whether the user wants to get a plot of the result or not (default True)
+        - save: flag indicating whether to save linear regression plot as .png file or not (default False)
+        - dest_path: folder where to save the linear regression plot if save is True (default current folder)
+        - filename: file name of regression plot (PNG file) (default: 'regression_plot.png')
+    
+    Returns:
+        - linear regression plot and linear regression parameters
+        - Return also squared error and R2
+    
+    """
+    
+    print('\nChecking that result and reference are 1D and that they have the same length\n')
+    
+    if (len(result.shape) == 1) and (len(reference.shape) == 1):
+        
+        if len(result) == len(reference):
+            
+            print('Computing linear regression model\n')
+            
+            print('Result: {} +- {}\n'.format(np.mean(result), np.std(result)))
+            
+            print('Reference: {} +- {}\n'.format(np.mean(reference), np.std(reference)))
+    
+            # Create linear regression object
+            
+            regr = linear_model.LinearRegression(fit_intercept = True)
+            
+            # Train the model
+            
+            # Add a column of ones to the reference
+            
+            ref_aux = np.ones((len(reference), 2))
+            
+            ref_aux[:,0] = reference
+            
+            regr.fit(ref_aux, result)
+    
+            # Make predictions using the reference 
+            
+            pred = regr.predict(ref_aux)
+            
+            print('Linear regression model completed successfully!\n')
+            
+            print('Resulting coefficients and intercept: {} {}\n'.format(regr.coef_[0], regr.intercept_))
+
+            # The mean squared error
+            
+            print('Mean squared error: {}\n'.format(mean_squared_error(result, pred)))
+            
+            # The coefficient of determination: 1 is perfect prediction
+            
+            print('Coefficient of determination: {}\n'.format(r2_score(result, pred)))
+
+            # fit a curve to the data using a least squares 1st order polynomial fit
+            #z = np.polyfit(reference,result,1)
+            #p = np.poly1d(z)
+            #fit = p(reference)
+
+            # get the coordinates for the fit curve
+            #c_y = [np.min(fit),np.max(fit)]
+            #c_x = [np.min(reference),np.max(reference)]
+
+            # predict y values of origional data using the fit
+            #p_y = z[0] * reference + z[1]
+
+            # calculate the y-error (residuals)
+            #result_err = result -p_y
+
+            # create series of new test x-values to predict for
+            #p_x = np.arange(np.min(reference),np.max(reference)+1,1)
+
+            # now calculate confidence intervals for new test x-series
+            #mean_x = np.mean(reference)         # mean of x
+            #n = len(reference)              # number of samples in origional fit
+            #t = 1.7                # appropriate t value (where n=9, two tailed 95%)
+            #s_err = np.sum(np.power(result_err,2))   # sum of the squares of the residuals
+
+            #confs = t * np.sqrt((s_err/(n-2))*(1.0/n + (np.power((p_x-mean_x),2)/
+            #            ((np.sum(np.power(reference,2)))-n*(np.power(mean_x,2))))))
+
+            # now predict y based on test x-values
+            #p_y = z[0]*p_x+z[0]
+
+            # get lower and upper confidence limits based on predicted y and confidence intervals
+            #lower = p_y - abs(confs)
+           # upper = p_y + abs(confs)
+            
+            if plotting:
+                
+                fig = plt.figure()
+                
+                # Points
+                
+                plt.scatter(reference, result, s = 10, color = 'black', label = 'Measured points')
+                
+                # Regression line
+                
+                plt.plot(reference, pred, color='blue', linewidth=3, label = 'Regression line')
+                
+                plt.plot(reference, reference, color='gray', linewidth = 1, label = 'Ideal line')
+                
+                # plot confidence limits
+                
+                #plt.plot(p_x,lower,'r--',label='Lower confidence limit (95%)')
+
+                #plt.plot(p_x,upper,'r--',label='Upper confidence limit (95%)')
+                
+                if 'test' in filename:
+                    
+                    plt.title('Test set')
+                    
+                elif 'all' in filename:
+                    
+                    plt.title('Cross-validation set')
+                    
+                elif 'ckd1' in filename:
+                    
+                    plt.title('CKD1 set')
+                    
+                else:
+                
+                    plt.title('Linear regression plot')
+                
+                plt.xlabel('Reference values (ml/s)')
+                
+                plt.ylabel('Computed values (ml/s)')
+                
+                plt.legend()
+                
+                plt.show()
+                
+                if save:
+                    
+                    figure_saving(dest_path, filename, fig)
+                    
+            return [regr.coef_[0], regr.intercept_], mean_squared_error(result, pred), r2_score(result, pred)
+            
+        else:
+            
+            print('Result and reference vectors do not have the same length. Please input them so that they have the same length')
+        
+    else:
+        
+        print('Result or reference vectors are not 1D. Please reformat them to be 1D')
+    
+
+
+
+def bland_altman_plot(result, reference, save = False, dest_path = os.getcwd() + '/', filename = 'bland_altman_plot.png'):
+    
+    """
+    Compute the Bland-Altman plot for the flow results from the neural network 
+    and the reference results from Segment.
+    
+    Params:
+        - result: 1D array with flow results from neural network segmentation
+        - reference: 1D array with reference flow results from software Segment
+        - save: flag indicating whether to save linear regression plot as .png file or not (default False)
+        - dest_path: folder where to save the linear regression plot if save is True (default current folder)
+        - filename: file name of regression plot (PNG file) (default bland_altman_plot.png)   
+        
+    
+    
+    """
+    
+    print('\nChecking that result and reference are 1D and that they have the same length\n')
+    
+    if (len(result.shape) == 1) and (len(reference.shape) == 1):
+        
+        if len(result) == len(reference):
+            
+            print('Computing Bland-Altman plot\n')
+            
+            f, ax = plt.subplots(1)
+            
+            sm.graphics.mean_diff_plot(result, reference, ax = ax)
+            
+            if 'test' in filename:
+                    
+                plt.title('Test set')
+
+            elif 'all' in filename:
+
+                plt.title('Cross-validation set')
+
+            elif 'ckd1' in filename:
+
+                plt.title('CKD1 set')
+
+            else:
+            
+                plt.title('Bland-Altman plot')
+                
+            plt.xlabel('Average values')
+            
+            plt.ylabel('Difference values')
+    
+            plt.show()
+    
+            if save:
+                    
+                figure_saving(dest_path, filename, f)
+            
+        else:
+            
+            print('Result and reference vectors do not have the same length. Please input them so that they have the same length')
+        
+    else:
+        
+        print('Result or reference vectors are not 1D. Please reformat them to be 1D')
+    
+    
+def correlation(result, reference):
+ 
+    """
+    Compute Pearson correlation coefficient (r) between network result and ground-truth
+    
+    Params:
+    
+        - result: network result
+        
+        - reference: ground-truth
+        
+    Returns:
+    
+        - r: Pearson correlation coefficient
+
+    """
+    
+    r = np.corrcoef(result, reference)[0,1]
+    
+    return r

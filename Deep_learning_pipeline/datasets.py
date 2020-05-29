@@ -193,7 +193,9 @@ class QFlowDataset(data.Dataset):
 
         slices_folder = sorted(os.listdir(path[:ind + 1])) # All slice files found in the same folder
 
-        all_slices = sorted([s for s in slices_folder if path[(ind + 1):(-7)] in s]) # All slice filenames of the same volume
+        all_slices = sorted([s for s in slices_folder if ((path[(ind + 1):(-7)] in s) and (not('mip' in s)))]) # All slice filenames of the same volume
+        
+        all_slices = [item for item in all_slices if not('sum' in item) and not('mip' in item)]
 
         num_slices = len(all_slices)
 
@@ -250,7 +252,71 @@ class QFlowDataset(data.Dataset):
             cont += 1
             
         return final_array
+    
+    
+    def othExtractor(self, raw_path, raw_array):
+        
+        """
+        Extracts the corresponding 'OTH' image in case we want to train with 'OTH' images as extra channels
+        
+        (if '_oth' in params.train_with)
+        
+        """
+   
+        # Get primary images with which the training is being done
+    
+        splitting = params.train_with.split('_')
+        
+        primary = splitting[0]
+        
+        if primary == 'both' or primary == 'mag':
+                
+            oth_path = raw_path.replace('mag','oth')
 
+        elif primary == 'magBF' or primary == 'bothBF':
+
+            oth_path = raw_path.replace('magBF','oth')
+
+        elif primary == 'pha':
+
+            oth_path = raw_path.replace('pha','oth')
+        
+        if 'mip' in params.train_with: # Take the MIP of the OTH files (only available in 2D mode)
+            
+            ind_frame = oth_path.index('frame')
+            
+            oth_path = oth_path[:ind_frame] + 'mip.vtk'
+            
+        if os.path.exists(oth_path): # Existing modality (Philips, Siemens)
+             
+            oth_array, origin, spacing = self.readVTK(oth_path)
+            ind = np.where(oth_array == oth_array[0,0,0])
+            oth_array[ind] = -1
+
+            if not(params.three_D):
+
+                oth_array = oth_array[:,:,0]
+
+            if params.add3d > 0:
+                
+                if not('mip' in oth_path):
+
+                    oth_array = self.addNeighbors(oth_path, oth_array)
+                    
+                else:
+                    
+                    aux = np.repeat(oth_array, params.add3d*2+1, -1)
+                    
+                    oth_array = np.reshape(aux, (oth_array.shape[0], oth_array.shape[1], params.add3d*2+1))
+                
+        else: # Non-existing modality (GE)
+            
+            #oth_array = np.zeros(raw_array.shape) + 0.5
+            oth_array = np.ones(raw_array.shape)
+            
+        return oth_array
+                
+            
 #
     def __getitem__(self, index):
 
@@ -315,6 +381,7 @@ class QFlowDataset(data.Dataset):
                 else:
                     
                     channels = 1 # Only magnitude/only phase
+
             
             
             else:
@@ -326,7 +393,11 @@ class QFlowDataset(data.Dataset):
                 else:
                     
                     channels = 3 # Magnitude/phase + sum of all magnitudes/phases in time + MIP of magnitude/phase along time
+                
+            #if '_oth' in params.train_with:
 
+             #   channels += 1 # Channels before + 'oth' modality
+                
  
             raw,_,_ = self.readVTK(raw_path)
     
@@ -373,7 +444,6 @@ class QFlowDataset(data.Dataset):
                         img[:,:,1] = sum_t
                         
                         img[:,:,2] = mip
-    
             
             else:
                 
@@ -417,8 +487,24 @@ class QFlowDataset(data.Dataset):
                     else:
                         
                         img[:,:,1] = pha_array[:,:,0]
+                        
                     
-            
+            if '_oth' in params.train_with: # Incorporate extra modality as last channel
+    
+                oth_array = self.othExtractor(raw_path, raw)
+
+                if not(params.three_D) and params.add3d == 0:
+
+                    img[:,:,0] *= oth_array
+                    
+                    #img[:,:,-1] = oth_array 
+
+                else:
+
+                    img[:,:,:,0] *= oth_array
+                    
+                    #img[:,:,:,-1] = oth_array
+                    
             
             if self.train and self.augmentation:
                 

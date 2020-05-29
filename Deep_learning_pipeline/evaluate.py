@@ -63,6 +63,12 @@ class Dice():
         
         denominator = 0
         
+        if params.add3d > 0:
+            
+            self.ground_truth = self.ground_truth[:,:,:,params.add3d]
+            
+            self.prediction = self.prediction[:,:,:,params.add3d]
+        
         numerator += float(torch.sum(torch.mul(self.ground_truth, self.prediction)))
         
         denominator += float(torch.add(torch.sum(self.ground_truth), torch.sum(self.prediction)))

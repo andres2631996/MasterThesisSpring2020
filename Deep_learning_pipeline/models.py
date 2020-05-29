@@ -442,6 +442,10 @@ class UNet_with_Residuals(nn.Module):
         elif not(params.sum_work) and not('both' in params.train_with):
         
             in_chan = 1 # Train magnitude or phase (no sum)
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
         self.conv1 = nn.Conv2d(in_chan, params.base, params.kernel_size, padding=params.padding)
         
@@ -616,6 +620,10 @@ class NewUNet_with_Residuals(nn.Module):
         elif not(params.sum_work) and not('both' in params.train_with):
         
             in_chan = 1 # Train magnitude or phase (no sum)
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
         self.conv1 = nn.Conv2d(in_chan, params.base, params.kernel_size, padding=params.padding)
         
@@ -1120,6 +1128,10 @@ class AttentionUNet(nn.Module):
             elif not(params.sum_work) and not('both' in params.train_with):
 
                 in_chan = 1 # Train magnitude or phase (no sum)
+                
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
             
         # Encoder
 
@@ -1267,6 +1279,10 @@ class NewAttentionUNet(nn.Module):
             elif not(params.sum_work) and not('both' in params.train_with):
 
                 in_chan = 1 # Train magnitude or phase (no sum)
+                
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
             
         # Encoder
 
@@ -1354,6 +1370,10 @@ class TimeDistributedAttentionUNet(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
             
         # Encoder
@@ -1493,7 +1513,10 @@ class TimeDistributedUNet(nn.Module):
         else:
 
             in_chan = 1
-
+            
+       # if '_oth' in params.train_with: # DE-ACTIVATE LATER!!!
+                
+        #    in_chan += 1
             
         # Encoder
 
@@ -1710,6 +1733,10 @@ class Hourglass(nn.Module):
 
             in_chan = 1
 
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
+            
             
         # Encoder
 
@@ -1976,7 +2003,9 @@ class NestedUNet2d(nn.Module):
 
             in_chan = 1 # Train magnitude or phase (no sum)
             
-            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1    
         
         self.conv0_0 = convBlock2d(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
         
@@ -2071,6 +2100,10 @@ class NestedUNet2dTime(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
             
         self.conv0_0 = convBlock2dtime(in_chan, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'encoder')
@@ -2194,7 +2227,9 @@ class NestedUNet2dAutocontext(nn.Module):
 
             in_chan = 1 # Train magnitude or phase (no sum)
             
-            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1    
 
         
         self.conv0_0 = convBlock2d(in_chan + 1, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
@@ -2309,6 +2344,10 @@ class NestedUNet2dTimeAutocontext(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
             
         self.conv0_0 = convBlock2dtime(in_chan + 1, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'encoder')
@@ -2440,6 +2479,10 @@ class NestedUNet2dTimeMemory(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
             
         self.conv0_0 = convBlock2dtime(in_chan + 1, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)), 'encoder')
@@ -2605,6 +2648,10 @@ class NestedUNet2dScale(nn.Module):
         elif not(params.sum_work) and not('both' in params.train_with):
 
             in_chan = 1 # Train magnitude or phase (no sum)
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
             
             
         self.pad = addRowCol2d()
@@ -2801,6 +2848,10 @@ class NestedUNet2dTimeScale(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
             
         self.pad = addRowCol3d()
 
@@ -3044,6 +3095,10 @@ class AttentionUNetScale(nn.Module):
             elif not(params.sum_work) and not('both' in params.train_with):
 
                 in_chan = 1 # Train magnitude or phase (no sum)
+                
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
             
         # Encoder
 
@@ -3262,6 +3317,10 @@ class AttentionUNetAutocontext(nn.Module):
             elif not(params.sum_work) and not('both' in params.train_with):
 
                 in_chan = 1 # Train magnitude or phase (no sum)
+                
+        #if '_oth' in params.train_with: # DE-ACTIVATE LATER!!!
+                
+         #   in_chan += 1
             
         # Encoder
 
@@ -3428,7 +3487,7 @@ class AttentionUNetMemory(nn.Module):
             else:
 
                 in_chan = 1
-                
+ 
         else:
         
             if params.sum_work and 'both' in params.train_with:
@@ -3446,6 +3505,10 @@ class AttentionUNetMemory(nn.Module):
             elif not(params.sum_work) and not('both' in params.train_with):
 
                 in_chan = 1 # Train magnitude or phase (no sum)
+                
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
             
         # Encoder
 
@@ -3650,7 +3713,9 @@ class NestedUNet2dMemory(nn.Module):
 
             in_chan = 1 # Train magnitude or phase (no sum)
             
-            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1    
 
         
         self.conv0_0 = convBlock2d(in_chan + 1, params.base*(2**(params.num_layers - 3)), params.base*(2**(params.num_layers - 3)))
@@ -3819,6 +3884,10 @@ class TimeDistributedAttentionUNetAutocontext(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
             
         # Encoder
@@ -3972,6 +4041,10 @@ class TimeDistributedUNetAutocontext(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
             
         # Encoder
@@ -4152,6 +4225,10 @@ class TimeDistributedUNetMemory(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
             
         # Encoder
@@ -4358,6 +4435,9 @@ class TimeDistributedUNetScale(nn.Module):
 
             in_chan = 1
 
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
             
         # Encoder-coarse
 
@@ -4609,6 +4689,10 @@ class kUNetGRU(nn.Module):
         else:
 
             in_chan = 1
+            
+        if '_oth' in params.train_with:
+                
+            in_chan += 1
 
         self.pad = addRowCol2d()
 
