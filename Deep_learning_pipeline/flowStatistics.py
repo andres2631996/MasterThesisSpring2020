@@ -252,39 +252,13 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
             
             print('Coefficient of determination: {}\n'.format(r2_score(result, pred)))
 
-            # fit a curve to the data using a least squares 1st order polynomial fit
-            #z = np.polyfit(reference,result,1)
-            #p = np.poly1d(z)
-            #fit = p(reference)
-
-            # get the coordinates for the fit curve
-            #c_y = [np.min(fit),np.max(fit)]
-            #c_x = [np.min(reference),np.max(reference)]
-
-            # predict y values of origional data using the fit
-            #p_y = z[0] * reference + z[1]
-
-            # calculate the y-error (residuals)
-            #result_err = result -p_y
-
-            # create series of new test x-values to predict for
-            #p_x = np.arange(np.min(reference),np.max(reference)+1,1)
-
-            # now calculate confidence intervals for new test x-series
-            #mean_x = np.mean(reference)         # mean of x
-            #n = len(reference)              # number of samples in origional fit
-            #t = 1.7                # appropriate t value (where n=9, two tailed 95%)
-            #s_err = np.sum(np.power(result_err,2))   # sum of the squares of the residuals
-
-            #confs = t * np.sqrt((s_err/(n-2))*(1.0/n + (np.power((p_x-mean_x),2)/
-            #            ((np.sum(np.power(reference,2)))-n*(np.power(mean_x,2))))))
-
-            # now predict y based on test x-values
-            #p_y = z[0]*p_x+z[0]
-
-            # get lower and upper confidence limits based on predicted y and confidence intervals
-            #lower = p_y - abs(confs)
-           # upper = p_y + abs(confs)
+            # get CIs
+            
+            #sd = np.std(pred)
+            
+            #n = pred.shape[0]
+            
+            #ci = 1.96*sd/np.mean(pred)
             
             if plotting:
                 
@@ -300,33 +274,32 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
                 
                 plt.plot(reference, reference, color='gray', linewidth = 1, label = 'Ideal line')
                 
-                # plot confidence limits
+                # 95% Confidence Intervals
                 
-                #plt.plot(p_x,lower,'r--',label='Lower confidence limit (95%)')
-
-                #plt.plot(p_x,upper,'r--',label='Upper confidence limit (95%)')
+                #plt.fill_between(reference, pred-ci, pred+ci, color = 'blue', alpha = 0.2)
+                
                 
                 if 'test' in filename:
                     
-                    plt.title('Test set')
+                    plt.title('Test set', fontsize = 16)
                     
                 elif 'all' in filename:
                     
-                    plt.title('Cross-validation set')
+                    plt.title('Cross-validation set', fontsize = 16)
                     
                 elif 'ckd1' in filename:
                     
-                    plt.title('CKD1 set')
+                    plt.title('CKD1 set', fontsize = 16)
                     
                 else:
                 
                     plt.title('Linear regression plot')
                 
-                plt.xlabel('Reference values (ml/s)')
+                plt.xlabel('Reference values (ml/s)', fontsize = 18)
                 
-                plt.ylabel('Computed values (ml/s)')
+                plt.ylabel('Computed values (ml/s)', fontsize = 18)
                 
-                plt.legend()
+                plt.legend(fontsize = 14)
                 
                 plt.show()
                 

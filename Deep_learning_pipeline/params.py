@@ -67,7 +67,7 @@ supervision = True # If True, perform deep supervision on given architecture
 
 test = False # State if model is being trained (False) or tested/validated (True)
 
-autocontext = False # Cascaded network
+autocontext = True # Cascaded network
 
 autocontext_iter = 2 # Autocontext iterations
 
@@ -95,7 +95,7 @@ rnn = None # Type of recurrent architecture to be integrated with U-Net
 
 rnn_position = None # Part of the U-Net with recurrent modules (encoder/decoder/full)
 
-architecture = 'AttentionUNet' # Architecture type
+architecture = 'AttentionUNetAutocontext' # Architecture type
 
 normalization = 'instance' # Normalization type to apply in networks (None/batch/instance)
 
