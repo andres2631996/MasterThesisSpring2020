@@ -25,9 +25,9 @@ class biasFieldCorrector:
     
     Params:
         
-        - path: main path where to find the images to correct (VTK files)
-        - save_path: main path where to save the corrected images as VTK files
-        - num_iter: maximum number of iterations for bias field correction (list with one integer)
+        - path: main path where to find the images to correct (VTK files) (str)
+        - save_path: main path where to save the corrected images as VTK files (str)
+        - num_iter: maximum number of iterations for bias field correction (list with one integer) (list of int)
     
     """
     
@@ -45,17 +45,17 @@ class biasFieldCorrector:
         
         """
         Correct bias field inhomogeneities from given array with a given maximum 
-        number of iterations.
+        number of iterations, with SimpleITK.
         
         Params:
             
             - inherited parameters from class (see description at the beginning of the class)
-            - imag_array: Numpy array containing image to be corrected
-            - num_iter: maximum number of iterations to apply
+            - img_array: Numpy array containing image to be corrected (array)
+            - num_iter: maximum number of iterations to apply (int)
         
         Returns:
             
-            - result: array with corrected bias
+            - result: array with corrected bias (array)
         
         """
         
@@ -83,7 +83,7 @@ class biasFieldCorrector:
                 
                 img = sitk.GetImageFromArray(img_array[:,:,k]) # Transform array into ITK image
             
-                img = sitk.Cast(img, sitk.sitkFloat32) # Transform image values tp Float32
+                img = sitk.Cast(img, sitk.sitkFloat32) # Transform image values to Float32
                 
                 output = corrector.Execute(img) # Execute corrector
                 
@@ -101,14 +101,14 @@ class biasFieldCorrector:
         Params:
             
             - inherited from class (check at the beginning of the class)
-            - path: path where VTK file is located
-            - filename: VTK file name
+            - path: path where VTK file is located (str)
+            - filename: VTK file name (str)
         
         Returns:
             
-            - numpy array
-            - data origin
-            - data spacing
+            - numpy array (array)
+            - data origin (list of 3)
+            - data spacing (list of 3)
         
         """
     
@@ -135,9 +135,8 @@ class biasFieldCorrector:
     def arrayNormalizer(self,array):
         
         """
-        Normalizes array given between -1 and +1
-        
-        Removes potential outliers located in percentiles 1 or 99
+        Normalizes array given 
+
         
         Params:
     
@@ -145,7 +144,7 @@ class biasFieldCorrector:
             
         Returns:
             
-            - norm_array: normalized array without outliers
+            - norm_array: normalized array 
         
         """
         
@@ -167,11 +166,11 @@ class biasFieldCorrector:
         
         - Params:
             inherited class parameters (see description at beginning of the class)
-            array: array to be converted into .vtk file
-            filename: filename with which to save array as VTK file
-            path: path where to save VTK file
-            origin: origin of coordinate system, by default (0,0,0)
-            spacing: spacing of coordinate system, by default (1,1,1)
+            array: array to be converted into .vtk file (array)
+            filename: filename with which to save array as VTK file (str)
+            path: path where to save VTK file (str)
+            origin: origin of coordinate system, by default [0,0,0] (list of 3)
+            spacing: spacing of coordinate system, by default [1,1,1] (list of 3)
         
         """
           
@@ -265,13 +264,16 @@ class biasFieldCorrector:
                 
                     
         
-main_path = '/home/andres/Documents/_Data/_Patients/_Raw/_hero/'
+#main_path = '/home/andres/Documents/_Data/_Patients/_Raw/_hero/'
 
-save_path = '/home/andres/Documents/_Data/Bias_field_corrected_images/'
+#save_path = '/home/andres/Documents/_Data/Bias_field_corrected_images/'
 
-biasFieldCorr = biasFieldCorrector(main_path, save_path, [70])
+#biasFieldCorr = biasFieldCorrector(main_path, save_path, [70])
 
-biasFieldCorr.__main__()        
+#biasFieldCorr.__main__()
+
+
+
 
 #dcm = pydicom.read_file('sQFLOW_BHdx')
 #
