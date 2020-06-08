@@ -28,6 +28,19 @@ import random
 
 class Augmentations2D:
     
+    """
+    Augment 2D arrays as (B,C,H,W) with Albumentations library.
+    
+    Optionally allows for augmentation of 2D+time arrays, expressing time frames as separate channels of a 2D array, and then rewriting the array in 2D+time after augmentation
+    
+    Params:
+    
+    - img: training image to augment (array)
+    
+    - mask: training ground-truth to augment identically as the image (array)
+    
+    """
+    
     def __init__(self, img, mask):
         
         self.img = img
@@ -37,6 +50,24 @@ class Augmentations2D:
         
         
     def augment_slices(self,aug, data):
+        
+        """
+        Module where transformations are applied.
+        
+        Params:
+        
+            - aug: augmentation parameters (Albumentations Compose transformation)
+            
+            - data: data to be transformed (dictionary: {'image': [], 'mask': []})
+            
+        Return:
+        
+            - img: augmented image (array)
+            
+            - mask_aux: augmented mask (array)
+        
+        
+        """
         
         
         images_aug = aug(**data)
@@ -66,9 +97,11 @@ class Augmentations2D:
             
         data = {"image": self.img, "mask": self.mask}
 
-        img_final, mask = self.augment_slices(augmentation_pipeline, data)
+        img_final, mask = self.augment_slices(augmentation_pipeline, data) # Transformation application
         
         if params.three_D or (not(params.three_D) and params.add3d > 0):
+            
+            # Time flipping: different from the Albumentations flipping, which were horizontal or vertical
             
             if random.uniform(0,1) < params.augm2D_probs[3]:
             

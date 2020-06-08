@@ -28,6 +28,8 @@ class Augmentation:
     It is just used in 2D+time, since it allows to augment neighboring frames in
     the same way.
     
+    By now it is unused. I prefer to augment also 2D+time volumes inputting time frames as extra channels in Albumentations, it is faster
+    
     Params:
         
         - img: image to augment (N, H, W, T, channels)

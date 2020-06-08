@@ -57,38 +57,38 @@ def preprocessingType(preprocessing):
     
     """
     
-    if params.three_D:
+    if params.three_D: # For 2D+time architectures
     
         if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
     
-            start_folder = '/home/andres/Documents/_Data/_Patients/_Raw/'
+            start_folder = '/home/andres/Documents/_Data/_Patients/_Raw/' # No preprocessing (unused)
     
         elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
             
-            start_folder = '/home/andres/Documents/_Data/_Patients/_Prep/'
+            start_folder = '/home/andres/Documents/_Data/_Patients/_Prep/' # Full FOV pipeline (unused)
         
         elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
             
-            start_folder = '/home/andres/Documents/_Data/_Patients/_Pre_crop/'
+            start_folder = '/home/andres/Documents/_Data/_Patients/_Pre_crop/' # Central FOV pipeline 
         
         else:
             
             print('\nWrong pre-processing step introduced. Please introduce a valid pre-processing step\n')
     
     
-    else:
+    else: # For 2D or 2D+time architectures only with neighboring slices
         
         if preprocessing == 'raw' or preprocessing == 'Raw' or preprocessing == 'RAW':
 
-            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/'
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Raw/' # No preprocessing (unused)
 
         elif preprocessing == 'prep' or preprocessing == 'Prep' or preprocessing == 'PREP':
 
-            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Prep/'
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Prep/' # Full FOV pipeline (unused)
 
         elif preprocessing == 'crop' or preprocessing == 'Crop' or preprocessing == 'CROP':
 
-            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Pre_crop/'
+            start_folder = '/home/andres/Documents/_Data/_Patients2D/_Pre_crop/' # Central FOV pipeline
 
         else:
 
@@ -101,7 +101,7 @@ def preprocessingType(preprocessing):
 def weights_init(m):
     
     """
-    Initializes the weights in the layers with Xavier intialization
+    Initializes the weights in the layers with Xavier intialization (unused, just copied from Dag)
     
     :param m: The model in question
     :return:
@@ -165,12 +165,12 @@ def extractVTKfilesStratification(patient_paths):
     
     Params:
         
-        - patient_paths. list of lists with stratified patient paths
+        - patient_paths. list of lists with stratified patient paths (each list inside the main list represents the patient folders in the same cross-validation fold)
     
     
     Returns:
         
-        - raw_paths and mask_paths (paths of files to use)
+        - raw_paths and mask_paths (paths of files to use) (str)
     
     """
 
@@ -192,13 +192,13 @@ def extractVTKfilesStratification(patient_paths):
         
         patient_paths[cont] = [preprocessingType(params.prep_step) + path for path in fold]
         
-        # Split in case of working with 'oth' modality
+        # Split in case of working with 'oth' modality (oth is a third modality present in Philips and Siemens images, apart from magnitude and phase, from "other" --> "oth")
         
         if '_oth' in params.train_with:
             
             splitting = params.train_with.split('_')
             
-            primary = splitting[0]
+            primary = splitting[0] # Main modality used together with 'oth'
             
         else:
             
@@ -210,7 +210,7 @@ def extractVTKfilesStratification(patient_paths):
         
                 images = sorted(os.listdir(patient_path)) 
             
-                if 'both' in params.train_with:
+                if 'both' in params.train_with: # Train with magnitude and phase (both)
                     
                     if params.train_with == 'bothBF' or primary == 'bothBF':
                         
@@ -321,25 +321,37 @@ def extractVTKfilesStratification(patient_paths):
 def pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths):
 
     """
-    Extract raw files and mask files for each cross validation fold.
+    Extract raw file names and mask file names for each cross validation fold.
     
     Params:
         
-        k: fold index of cross validation
+        k: fold index of cross validation (int)
         
-        m_path: path with stratified mask files
+        m_path: path with stratified mask files (str)
         
-        r_path: path with stratified raw files
+        r_path: path with stratified raw files (str)
         
-        patient_paths: path with stratified patients
+        patient_paths: path with stratified patients (list)
         
     
     Returns:
         
-        train_raw_path, train_mask_path, val_raw_path, val_mask_path, train_patients, val_patients
+        train_raw_path: folders with raw file names used for training (list of str)
+        
+        train_mask_path: folders with mask file names used for training (list of str)
+        
+        val_raw_path: folders with raw file names used for validation (list of str)
+        
+        val_mask_path: folders with mask file names used for validation (list of str) 
+        
+        train_patients: list of patients used for training (list of str)
+        
+        val_patients: list of patients used for validation (list of str)
 
 
-    """    
+    """  
+    
+    # Validation folders
     
     val_raw_paths = r_paths[k] # List with patient paths for validation
     
@@ -347,6 +359,8 @@ def pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths):
     
     val_patients = patient_paths[k]
 
+    
+    # Training folders
     
     if k == 0: # First fold 
 
@@ -408,7 +422,10 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
     
     :param val_patients: list of lists with stratified patients for validation
     
-    :return: loader_train, loader_val
+    :return: loader_train: training dataloader (PyTorch dataloader) 
+    
+    :return: loader_val: validation dataloader (PyTorch dataloader)
+    
     """
 
     
@@ -422,11 +439,11 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
         
         train = True
     
-        train_dataset = QFlowDataset(train_raw_paths, train_mask_paths, train, params.augmentation)
+        train_dataset = QFlowDataset(train_raw_paths, train_mask_paths, train, params.augmentation) # Training dataset
         
         
         
-        if K == 1:
+        if K == 1: # All data for training, no validation
             
                 
             print("Creating final network. No validation\n")
@@ -441,7 +458,7 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
             loader_val = None
                 
                 
-        else:
+        else: # Cross-validation
             
             num_total = len(train_mask_paths)
             
@@ -460,7 +477,7 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
                     
                 train = False
                 
-                val_dataset = QFlowDataset(val_raw_paths, val_mask_paths, train, False)
+                val_dataset = QFlowDataset(val_raw_paths, val_mask_paths, train, False) # Validation set
 
 
                 loader_val = torch.utils.data.DataLoader(val_dataset,
@@ -519,11 +536,7 @@ def get_data_loader(train_raw_paths, train_mask_paths, k, K, data_path, val_raw_
                     
                     file.write('\n')
         
-    
-#        if K==1 and params.patients_to_be_moved:
-#            moved_patients_img, moved_patients_seg = loader_val.remove_paths(params.patient_to_be_moved)
-#            loader_train.add_paths(moved_patients_img, moved_patients_seg)
-#            print("Moved patients:", moved_patients_img, moved_patients_seg)
+
     
         return loader_train, loader_val
 
@@ -537,9 +550,9 @@ def resultPrint(losses, val_results):
     
     Params:
         
-        - losses: list with final losses of each fold (on training set)
+        - losses: list with final losses of each fold (on training set) (list of lists)
         
-        - val_results: list with final validation results of each fold
+        - val_results: list with final validation results of each fold (list of lists)
     
     
     """
@@ -560,10 +573,10 @@ def resultPrint(losses, val_results):
     
     plt.ylabel(params.loss_fun + ' loss')
     
-    fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
+    fig.savefig(params.network_data_path + 'loss_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png') # Plot of loss of each fold
     
     
-    if val_results is not None:
+    if val_results is not None: # If k > 1 and there has been a validation set, display metrics results
         
         for i in range(len(params.metrics)):
 
