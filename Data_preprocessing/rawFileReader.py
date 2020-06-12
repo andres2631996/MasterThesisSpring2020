@@ -141,32 +141,68 @@ class ExtractRawFiles:
         return orientation
     
     
-    def repetitionExtractor(self, folder):
+    def repetitionExtractor(self, parent, folder):
         
         """
         Extract whether files to be read are repeated acquisitions or not.
         
         Params:
             - inherited from class (see description at beginning)
+            
+            - parent: parent directory where the main folder is contained
+            
             - folder: folder name where to check for information
             
         Return: repetition string (rep) ('_0' for first acquisition, '_1' for second... and so on)
 
         """ 
         
-        for i in range(6):
+        if self.study == 'CKD2':
             
-            test_str = '_' + str(i)
-            
-            if test_str in folder:
-            
-                rep = '_' + str(i)
-                
-                break
-            
+            files = sorted(os.listdir(parent))
+        
+            if len(files) == 4 or len(files) < 4:
+
+                for i in range(6):
+
+                    test_str = '_' + str(i)
+
+                    if test_str in folder:
+
+                        rep = '_' + str(i)
+
+                        break
+
+                    else:
+
+                        rep = '_0'
+                        
             else:
                 
-                rep = '_0'
+                if folder[-2:] == 'dx' or folder[-2:] == 'in' or folder[-2:] == '_1' or folder[-2:] == '_2':
+                    
+                    rep = '_0'
+                    
+                else:
+                    
+                    rep = '_1'
+                        
+        else:
+            
+            for i in range(6):
+
+                test_str = '_' + str(i)
+
+                if test_str in folder:
+
+                    rep = '_' + str(i)
+
+                    break
+
+                else:
+
+                    rep = '_0'
+            
         
         return rep
         
@@ -259,7 +295,39 @@ class ExtractRawFiles:
         
         return reformat_array
     
+    
+    def pipeline2(self, img, mod):
         
+        """
+        Preprocess images directly as in proposed Pipeline 2
+        
+        Params:
+        
+            - img: image to preprocess
+            
+            - mod: modality to which image belongs (magnitude/phase)
+            
+        Returns:
+        
+            - final: preprocessed image
+        
+        """
+        
+        # Central cropping
+        
+        center = np.array(img.shape)//2
+        
+        final = img[center[0]-32:center[0]+32,center[1]-32:center[1]+32,:]
+        
+        p98 = np.percentile(img.flatten(), 98)
+        
+        if mod == 'mag':
+            
+            final = 2*(final - np.amin(final))/(np.amax(final) - np.amin(final)) - 1
+            
+        
+        return final
+    
     
     def dicomFieldExtractor(self, image_path):
         
@@ -281,8 +349,8 @@ class ExtractRawFiles:
         
         #print('Extracting relevant information from found DICOM files\n')
         
-
-        if not os.path.isdir(image_path):
+        
+        if os.path.isfile(image_path):
 
             dcm = pydicom.read_file(image_path) # Dataset with all DICOM fields
             
@@ -304,7 +372,7 @@ class ExtractRawFiles:
             
             orientation = self.orientationExtractor(image_path)
             
-            rep = self.repetitionExtractor(image_path)
+            rep = self.repetitionExtractor(image_path, image_path)
             
             vein_flag = False
             
@@ -358,6 +426,7 @@ class ExtractRawFiles:
                 modal.append(self.modalityExtractor(dcm.ImageType)) # List with all modalities
 
                 instance_num.append(float(dcm.InstanceNumber))
+                
 
             spacing = dcm.PixelSpacing # Resolution in mm/pixel (for VTK file)
                     
@@ -381,7 +450,15 @@ class ExtractRawFiles:
             
             num_folder = float(dcm.AcquisitionNumber) # Acquisition number for the last image read in the folder. All images in the same folder have the same acquisition number
             
-            return reformat_array, num_array, time_array, modal_array, instance_array, spacing, origin, num_folder
+            if ('(2001, 101a)' in key_str):
+            
+                venc = dcm[0x2001101A].value[0]
+                
+            else:
+                
+                venc = 0
+            
+            return reformat_array, num_array, time_array, modal_array, instance_array, spacing, origin, num_folder, venc
 
                                     
                                      
@@ -396,6 +473,12 @@ class ExtractRawFiles:
             #key = 'QFLOW' # Key to look for folders with images
             
             patients = os.listdir(self.path)
+            
+            vencs = []
+            
+            times = []
+            
+            names = []
             
             for patient_folder in patients:
                 
@@ -419,7 +502,9 @@ class ExtractRawFiles:
                                 
                                 # Extract DICOM fields
                                 
-                                arrays_array, num_array, time_array, modal_array, _ , spacing, origin, _ = self.dicomFieldExtractor(image_path)
+                                arrays_array, num_array, time_array, modal_array, _ , spacing, origin, _, venc = self.dicomFieldExtractor(image_path)
+                                
+                                vencs.append(venc)
         
                                 num_unique = np.unique(num_array) # Array with unique acquisition numbers
 
@@ -449,77 +534,103 @@ class ExtractRawFiles:
                                         
                                         time_num_m_sort_ind = np.argsort(time_num_m) # Indexes of sorted time frames
                                         
+                                        time_sort = np.sort(time_num_m)
+                                        
                                         final_image = arrays_array[:,:,ind_num_m[time_num_m_sort_ind]] # Sorted final image
 
                                         # Structure of final filename: study + patient + right/left kidney + magnitude/phase/other + repeated acquisition
                                         
-                                        final_filename = study + '_' + patientID + '_' + orientation + '_' + m + '_' + str(cont_acq) + '.vtk'
+                                        final_filename = self.study + '_' + patientID + '_' + orientation + '_' + m + '_' + str(cont_acq) + '.vtk'
+                                        
                                         
                                         # Save as VTK file in provided destination folder
                                         
                                         self.array2vtk(final_image, final_filename, self.dest_path + '_' + m + '/', origin, spacing)
+                                    names.append(self.study + '_' + patientID + '_' + orientation + '_' + str(cont_acq))
                                              
-                                    cont_acq += 1  
-                                            
+                                    cont_acq += 1
+                                    
+                                    #times.append(time_sort[1] - time_sort[0])
+                                    
+                                    #vencs.append(venc)
+                                    
+                                    #np.savetxt(self.dest_path + 'filenames.txt', names, fmt = '%s')
+                                    
+                                    #np.savetxt(self.dest_path + 'times.txt', times)
+                                    
+                                    #np.savetxt(self.dest_path + 'vencs.txt', vencs)
                                             
         elif self.study == 'CKD2':
             
             #print('\nNavigating through folders\n')
             
-            patients = os.listdir(self.path) 
+            patients = sorted(os.listdir(self.path))
+            
+            vencs = []
+            
+            names = []
+            
+            times = []
         
             for patient_folder in patients:
         
                 patientID = patient_folder[0:11]                                   
-                                            
+
                 if patient_folder[0:3] == 'CKD': # Check that folder belongs to study
-                        
+
                     patient_files = sorted(os.listdir(self.path + patient_folder + '/'))
-                    
+
                     for image_folder in patient_files:
-                        
+
                         if self.key[0] in image_folder:
-                            
-                            image_path = part2_path + patient_folder + '/' + image_folder + '/' # Image folder
-                        
+
+                            image_path = self.path + patient_folder + '/' + image_folder + '/' # Image folder
+
                             orientation = self.orientationExtractor(image_folder)
-                            
-                            rep = self.repetitionExtractor(image_folder)
-                            
-                            arrays_array, num_array, time_array, mod_array, instance_array, spacing, origin, num_folder = self.dicomFieldExtractor(image_path)
-       
+
+                            rep = self.repetitionExtractor(self.path + patient_folder + '/', image_folder)
+
+                            arrays_array, num_array, time_array, mod_array, instance_array, spacing, origin, num_folder, venc = self.dicomFieldExtractor(image_path)
+
+                            vencs.append(venc)
+
+                            names.append(self.study + '_' + patientID + '_' + orientation + rep)
+
                             num_unique = np.unique(num_array) # Array with unique acquisition numbers
-                               
+
                             mod_unique = np.unique(mod_array) # Array just with the different modalities
-    
+
                             #cont = np.where(num_unique == num_folder) # Images with a certain acquisition number
-                                    
+
                             # Look for the different modalities under the same acquisition number
-                            
+
                             #print('Saving as VTK files with relevant information extracted from DICOM files\n')
 
                             for m in mod_unique:
-                                
-                                # Images from same modality and same acquisition number
-                                
-                                # Get index of these images in overall array
-                                
-                                ind_m = np.array(np.where(mod_array == m))[0] # Indexes of images of same modality
 
-                                time_m = time_array[ind_m] # Time values for same modality and same acquisition number
-                                
-                                time_m_sort_ind = np.argsort(time_m) # Indexes of sorted time frames
-                                
-                                final_image = arrays_array[:,:,ind_m[time_m_sort_ind]] # Sorted final image
-                                
-                                # Structure of final filename: study + patient + right/left kidney + magnitude/phase/other + repeated acquisition
-                                
-                                final_filename = study + '_' + patientID + '_' + orientation + '_' + m + rep + '.vtk'
-                                
-                                # Save as VTK file in provided destination folder
-                                
-                                self.array2vtk(final_image, final_filename, self.dest_path + '_' + m + '/', origin, spacing)
-         
+                                if m == 'oth':
+
+                                    # Images from same modality and same acquisition number
+
+                                    # Get index of these images in overall array
+
+                                    ind_m = np.array(np.where(mod_array == m))[0] # Indexes of images of same modality
+
+                                    time_m = time_array[ind_m] # Time values for same modality and same acquisition number
+
+                                    time_m_sort_ind = np.argsort(time_m) # Indexes of sorted time frames
+
+                                    final_image = arrays_array[:,:,ind_m[time_m_sort_ind]] # Sorted final image
+
+                                    #final_image = self.pipeline2(final_image,m)
+
+                                    # Structure of final filename: study + patient + right/left kidney + magnitude/phase/other + repeated acquisition
+
+                                    final_filename = self.study + '_' + patientID + '_' + orientation + '_' + m + rep + '.vtk'
+
+                                    self.array2vtk(final_image, final_filename, self.dest_path + '_' + m + '/', origin, spacing)
+
+
                                                 
                                                     
         elif (self.study == 'hero') or (self.study == 'Hero') or (self.study == 'HERO'):
@@ -558,7 +669,7 @@ class ExtractRawFiles:
                                     
                                     orientation = self.orientationExtractor(files_folder) # Orientation info
                                     
-                                    rep = self.repetitionExtractor(files_folder) # Repetition info
+                                    rep = self.repetitionExtractor(files_path, files_folder) # Repetition info
 
                                     arrays_array, _ , time_array, _ , instance_array, spacing, origin, _ = self.dicomFieldExtractor(files_path)
     
@@ -617,7 +728,7 @@ class ExtractRawFiles:
                                     
                                     # Decide on repetition
                                     
-                                    rep = self.repetitionExtractor(files_folder)
+                                    rep = self.repetitionExtractor(files_path, files_folder)
                                     
                                     # Extract DICOM fields of all files as lists
                                     
@@ -651,7 +762,7 @@ class ExtractRawFiles:
                                         
                                         if self.key[3] in new_folder: # Access only Qflow images
                                             
-                                            rep = self.repetitionExtractor(files_folder)
+                                            rep = self.repetitionExtractor(files_path, files_folder)
                                             
                                             new_path = files_path + new_folder + '/'
                                             
@@ -776,7 +887,7 @@ class ExtractRawFiles:
                             
                             # Decide on repetition
                             
-                            rep = self.repetitionExtractor(image_folder)
+                            rep = self.repetitionExtractor(new_path, image_folder)
 
                             mag_filename = study + '_' + patientID + '_' + orientation + '_mag' + rep + '.vtk'
                             
@@ -830,12 +941,12 @@ save_extra_path = '/home/andres/Documents/_Data/Extra/Clean_data/' # Folder wher
 
 #key_hero = ['PC', 'QFLOW', 'QFLOW', 'Qflow']
 
-study = 'Extr'
+#study = 'Extr'
 
-key_extra = ['QFLOW', 'PC']   
+#key_extra = ['QFLOW', 'PC']   
 
-extract = ExtractRawFiles(study, extra_path, save_extra_path, key_extra, True, True)
-extract.__main__() 
+#extract = ExtractRawFiles(study, extra_path, save_extra_path, key_extra, True, True)
+#extract.__main__() 
 
 # study = sys.argv[1]
 #file_path = sys.argv[2] 

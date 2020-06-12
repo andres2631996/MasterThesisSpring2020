@@ -35,15 +35,15 @@ class mask2contour:
     Use Marching Squares algorithm from Scikit-Image
     
     - Class parameters:
-        - filename: VTK file name
+        - array: binary mask from where to extract contour
         - path: path where VTK file is located
         - dest_path: path where we want to save the contour
     
     """
     
-    def __init__(self, filename, path, dest_path):
+    def __init__(self, array, path, dest_path):
         
-        self.filename = filename
+        self.array = array
         self.path = path
         self.dest_path = dest_path
     
@@ -132,11 +132,11 @@ class mask2contour:
         
         if overwrite == 'Y' or overwrite == 'y':
         
-             np.savetxt(self.dest_path + final_filename, array)
+            np.savetxt(self.dest_path + final_filename, array)
              
-             info_array = np.concatenate((np.array(origin),np.array(spacing)))
+            info_array = np.concatenate((np.array(origin),np.array(spacing)))
              
-             np.savetxt(self.dest_path + self.filename[0 : ind_] + '_OriginSpacing.txt', info_array)
+            np.savetxt(self.dest_path + self.filename[0 : ind_] + '_OriginSpacing.txt', info_array)
              
              #print('Contour(s) and information files saved successfully\n')
         
@@ -152,10 +152,6 @@ class mask2contour:
     
     def __main__(self):
         
-        #print('\nReading VTK file\n')
-        
-        array, origin, spacing = self.readVTK()
-        
         
         # Go through all frames
         
@@ -166,21 +162,21 @@ class mask2contour:
         #print('Extracting contours\n')
 
         
-        if len(array.shape) == 3:
+        if len(self.array.shape) == 3:
             
-            cont = measure.find_contours(array[:,:,0], level = 1 - np.finfo(float).eps)
+            cont = measure.find_contours(self.array[:,:,0], level = 1 - np.finfo(float).eps)
 
             for i in range(len(cont)):
         
-                for k in range(array.shape[-1]):
+                for k in range(self.array.shape[-1]):
                     
-                    cont = measure.find_contours(array[:,:,k], level = 1 - np.finfo(float).eps)[i]
+                    cont = measure.find_contours(self.array[:,:,k], level = 1 - np.finfo(float).eps)[i]
 
                     # Conversion into spatial coordinates. Take into account origin and spacing from VTK file
                     
                     #cont = np.array([origin[0], origin[1]]) + np.array([spacing[0], spacing[1]])*cont
                     
-                    if k != array.shape[-1] - 1: # Except in last frame, add [-1,-1] as delimiter
+                    if k != self.array.shape[-1] - 1: # Except in last frame, add [-1,-1] as delimiter
                     
                         cont = np.concatenate((cont,np.zeros((1,2))-1)) # Concatenate contour coordinates with [-1,-1] to set [-1,-1] as delimiter between frames
                     
@@ -194,9 +190,9 @@ class mask2contour:
                         whole_array = np.concatenate((whole_array, cont))
                     
                 
-                self.save2txt(whole_array, origin, spacing, i)
+                #self.save2txt(whole_array, origin, spacing, i)
                     
-                    
+                return whole_array    
                     
                     
         elif len(array.shape) == 2:
@@ -207,13 +203,13 @@ class mask2contour:
                 
                 whole_array = np.copy(cont[i])
                 
-                self.save2txt(whole_array, origin, spacing, i)
+                #self.save2txt(whole_array, origin, spacing, i)
                 
             # Conversion into spatial coordinates. Take into account origin and spacing from VTK file
             
             #cont = np.array([origin[0], origin[1]]) + np.array([spacing[0], spacing[1]])*cont
             
-            
+            return whole_array
         
         else:
             
@@ -223,9 +219,9 @@ class mask2contour:
     
 
 
-gt_path = '/home/andres/Documents/_Data/Extra/_Binary_masks/'
+#gt_path = '/home/andres/Documents/_Data/Extra/_Binary_masks/'
 
-dest_path = '/home/andres/Documents/_Data/Extra/_Contours/'
+#dest_path = '/home/andres/Documents/_Data/Extra/_Contours/'
 
 #gt_file = 'CKD007_MRI3_-2020-01-17_sin_AR_binaryMask.vtk'
 
@@ -236,15 +232,15 @@ dest_path = '/home/andres/Documents/_Data/Extra/_Contours/'
 
 # if __name__ == "__main__":
 
-files = sorted(os.listdir(gt_path))
+#files = sorted(os.listdir(gt_path))
 
-for file in files:
+#for file in files:
     
-    if file[-4:-1] == '.vt': # Access only VTK files in origin folder
+ #   if file[-4:-1] == '.vt': # Access only VTK files in origin folder
 
-        mask2cont = mask2contour(file,gt_path,dest_path)
+  #      mask2cont = mask2contour(file,gt_path,dest_path)
         
-        final_cont = mask2cont.__main__()
+   #     final_cont = mask2cont.__main__()
 
 
 

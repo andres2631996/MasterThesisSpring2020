@@ -29,12 +29,12 @@ class filePreprocessing:
     Params:
         
         - raw_path: raw folder where image files are organized into patients and
-                    studies
+                    studies (str)
                     
         - dest_path: destination folder to save preprocessed files, being
-                     organized into patients and studies
+                     organized into patients and studies (str)
                     
-        - matrixSize: desired matrix size
+        - matrixSize: desired matrix size (list of int)
     
     Outputs:
         
@@ -62,13 +62,13 @@ class filePreprocessing:
             
             - inherited from class (see class description above)
             
-            - path: path to check if exists
+            - path: path to check if exists (str)
             
-            - flag: if 'folder' checks for existence of a folder // if 'file' ckecks for existence of a file
+            - flag: if 'folder' checks for existence of a folder // if 'file' checks for existence of a file (str)
         
         Returns:
             
-            - exists: flag telling if file or folder exists or not
+            - exists: flag telling if file or folder exists or not (bool)
         
         """
         
@@ -215,13 +215,13 @@ class filePreprocessing:
             
         """
         
-        Zero pad mask image with shape of raw file.
+        Zero pad mask image with shape of raw file. Can be used instead of np.pad
         
         Params:
             
             - inherited from class (check at the beginning of the class)
             
-            - mask: 2D array to zero-pad
+            - mask: 2D array to zero-pad (array)
 
         
         Return: zero-padded mask in shape of raw file (result)
@@ -232,7 +232,9 @@ class filePreprocessing:
     
         center = np.array(np.array(shape)//2).astype(int) # Central voxel of raw file
         
-        mask_half_shape = np.floor(np.array(mask.shape)/2).astype(int)
+        mask_half_shape = np.floor(np.array(mask.shape)/2).astype(int) # Half-shape of mask image
+        
+        # Take into account odd or even dimensions of array to zero pad
     
         if (np.remainder(mask.shape[0], 2) == 0) and (np.remainder(mask.shape[1], 2) == 0):
     
@@ -270,18 +272,22 @@ class filePreprocessing:
             - array: array to be reshaped (must be 2D)
             
             - bandRemoving: two-element list indicating how many elements one wants 
-                            to remove from left and right sides of the image
+                            to remove from left and right sides of the image. Usually
+                            images have black bands left and right or fat deposits that
+                            are useless and can be removed (list of 2 int)
 
         
         Returns:
             
-            - reshaped: reshaped array with desired shape (2D)
+            - reshaped: reshaped array with desired shape (2D) (array)
         
         """
         
-        array = array[:,bandRemoving[0]: -bandRemoving[1],:]
+        array = array[:,bandRemoving[0]: -bandRemoving[1],:] # Removal of left and right bands
         
         flag1 = flag2 = 0 # Parameters to control if array has odd dimensions
+        
+        # If dimensions of original array are odd, make them even for a simpler processing
         
         if np.remainder(self.matrixSize[0],2) == 1:
             
@@ -322,9 +328,9 @@ class filePreprocessing:
             array = np.concatenate([array, np.zeros((array.shape[0], 1, array.shape[2]))], axis = 1)   
             
             
-        center = (np.array((array.shape))//2).astype(int)
+        center = (np.array((array.shape))//2).astype(int) # Central coordinate of input array
         
-        half_shape = (np.array((self.matrixSize))//2).astype(int)
+        half_shape = (np.array((self.matrixSize))//2).astype(int) # Half-shape of input array
         
         if (array.shape[0] > self.matrixSize[0] or array.shape[0] == self.matrixSize[0]) and ((array.shape[1] > self.matrixSize[1] or array.shape[1] == self.matrixSize[1])):
             
@@ -432,13 +438,13 @@ class filePreprocessing:
 
     def __main__(self):
         
-        print('\nChecking if input folder exists\n')
+        #print('\nChecking if input folder exists\n') # Check if input folder exists
 
         exists_raw_folder = self.existenceChecker(self.raw_path, flag = 'folder')
 
         if exists_raw_folder:
             
-            print('Navigating through folders\n')
+            #print('Navigating through folders\n')
             
             studies = os.listdir(self.raw_path)
         
@@ -468,9 +474,9 @@ class filePreprocessing:
                             
                             array, origin, spacing = self.readVTK(patient_path, image) # Raw file reading
                             
-                            # Array cropping in the center
+                            # Array reshaping to desired dimensions
                             
-                            print('Array reshaping\n')
+                            #print('Array reshaping\n')
         
                             out = self.arrayReshaping(array, band)
                             
@@ -480,7 +486,7 @@ class filePreprocessing:
                             
                                 # Normalization between -1 and +1
                                 
-                                print('Array normalization\n')
+                                #print('Array normalization\n')
                                 
                                 out = self.arrayNormalizer(out)
                             
@@ -488,41 +494,47 @@ class filePreprocessing:
                             
                             if (matrixSize[0] < 128) or (matrixSize[0] == 128):
                             
-                                key = '_crop'
+                                key = '_crop' # Central FOV preprocessing pipeline
                             
                             else:
                                 
-                                key = '_prep'
+                                key = '_prep' # Full FOV preprocessing pipeline
         
         
                             final_filename = image[:-4] + key + image[-4:]
                             
                             final_path = self.dest_path + study + '/' + patient + '/'
         
-                            self.array2vtk(out, final_filename, final_path, origin, spacing)
+                            self.array2vtk(out, final_filename, final_path, origin, spacing) # Save preprocessed images as VTK files
                             
-                            print('Image pre-processed and saved successfully!\n')
+                            #print('Image pre-processed and saved successfully!\n')
                                 
         else:
         
             print('\nNon-existing input folder. Please provide a valid input folder\n')                    
 
 
-matrixSize = [64, 64] # Output matrix size
+# Example of use            
+            
+#matrixSize = [64, 64] # Output matrix size
         
-raw_path = '/home/andres/Documents/_Data/_Patients/_Raw/' # Starting path
+#raw_path = '/home/andres/Documents/_Data/_Patients/_Raw/' # Starting path
 
-dest_path = '/home/andres/Documents/_Data/_Patients/_Pre_crop/' # Destination path
+#dest_path = '/home/andres/Documents/_Data/_Patients/_Pre_crop/' # Destination path
 
-filePrep = filePreprocessing(raw_path, dest_path, matrixSize)
+#filePrep = filePreprocessing(raw_path, dest_path, matrixSize)
 
-t1 = time.time()
+#t1 = time.time()
 
-filePrep.__main__()
+#filePrep.__main__()
 
-t2 = time.time()
+#t2 = time.time()
 
-print('\nPre-processing time: {} seconds'.format(t2 - t1))
+#print('\nPre-processing time: {} seconds'.format(t2 - t1))
+
+
+
+
 
 # To run from terminal:
 
