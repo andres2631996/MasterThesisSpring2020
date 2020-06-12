@@ -40,14 +40,14 @@ class Dice():
     
     Params:
         
-        - ground_truth: mask
+        - ground_truth: mask (PyTorch tensor)
         
-        - prediction: network output
+        - prediction: network output (PyTorch tensor)
     
     
     Returns:
         
-        - dice coefficient value
+        - dice coefficient value (float)
     
     """
     
@@ -84,13 +84,13 @@ class Precision():
     
     Params:
         
-        - ground_truth: mask
+        - ground_truth: mask (PyTorch tensor)
         
-        - prediction: network output
+        - prediction: network output (PyTorch tensor)
         
     Returns:
     
-        - precision value
+        - precision value (float)
     
     """
     
@@ -123,13 +123,13 @@ class Recall():
     
     Params:
         
-        - ground_truth: mask
+        - ground_truth: mask (PyTorch tensor)
         
-        - prediction: network output
+        - prediction: network output (PyTorch tensor)
         
     Returns:
     
-        - recall value
+        - recall value (float)
     
     """
     
@@ -154,143 +154,6 @@ class Recall():
         
 
 
-#class TrueVolume():
-#    
-#    def __init__(self):
-#        
-#        self.voxels = 0
-#        
-#    def online(self, ground_truth, prediction):
-#        
-#        self.voxels += int(torch.sum(ground_truth).cpu())
-#        
-#    def final(self):
-#        
-#        return self.voxels
-#    
-#    
-#
-#class PredictedVolume():
-#    
-#    def __init__(self):
-#        
-#        self.voxels = 0
-#        
-#    def online(self, ground_truth, prediction):
-#        
-#        self.voxels += int(torch.sum(prediction).cpu())
-#        
-#        
-#    def final(self):
-#        
-#        return self.voxels
-#
-#
-#
-#
-#
-#class MIP():
-#    
-#    def __init__(self, shapes):
-#        
-#        self.input = torch.zeros(shapes).cuda()#.long().cuda()
-#        
-#        self.seg = torch.zeros(shapes).long().cuda()
-#        
-#    def online(self, ground_truth, prediction, raw):
-#        
-#        #input_data = input_data.long()
-#   
-#        if 'both' in params.train_with:
-#    
-#            self.input = torch.max(self.input, raw[:,:,:,0])
-#        
-#        else:
-#            
-#            self.input = torch.max(self.input, raw[:,:,:])
-#            
-#
-#        correct = 3 * torch.mul(ground_truth, prediction)
-#        
-#        under = 2 * ground_truth
-#        
-#        over = prediction
-#        
-#        temp = torch.max(under, over)
-#        
-#        temp = torch.max(temp, correct)
-#        
-#        self.seg = torch.max(temp, self.seg)
-#        
-#    def final(self):
-#        
-#        self.input = self.input.cpu().numpy()
-#        
-#        self.seg = self.seg.cpu().numpy()
-#        
-#        return self
-#    
-#    
-#  
-#    
-#
-#class Segmentations():
-#    
-#    def __init__(self):
-#        
-#        self.input = []
-#        
-#        self.seg = []
-#
-#    def online(self, ground_truth, prediction, raw):
-#        
-#        #input_data = input_data.long()
-#        
-#        if 'both' in params.train_with:
-#            
-#            if params.three_D:
-#            
-#                for k in range(raw.shape[3]):
-#            
-#                    self.input.append(raw[:, :, :, k, 0].cpu().numpy())
-#            
-#            else:
-#                
-#                for k in range(raw.shape[2]):
-#            
-#                    self.input.append(raw[:, :, k, 0].cpu().numpy())
-#        
-#        else:
-#            
-#            if params.three_D:
-#                
-#                for k in range(raw.shape[3]):
-#            
-#                    self.input.append(raw[:, :, :, k].cpu().numpy())
-#                
-#            else:
-#                
-#                for k in range(raw.shape[2]):
-#            
-#                    self.input.append(raw[:, :, k].cpu().numpy())
-#                
-#        
-#        correct = 3 * torch.mul(ground_truth, prediction)
-#        
-#        under = 2 * ground_truth
-#        
-#        over = prediction
-#        
-#        temp = torch.max(under, over)
-#        
-#        temp = torch.max(temp, correct)
-#        
-#        self.seg.append(temp.cpu().numpy())
-#        
-#    def final(self):
-#        
-#        return self
-
 
 
 def evaluate(net, loader, iteration, key):
@@ -298,15 +161,25 @@ def evaluate(net, loader, iteration, key):
     """
     Evaluations done during cross-validation
     
-    :param net:
+    :param net: (PyTorch model)
         
-    :param loader:
+    :param loader: (PyTorch dataloader, usually the validation dataloader)
         
-    :param iteration:
+    :param iteration: (int)
     
     :param: key: tells if evaluation is done for validation ("val") or for testing ("testing")
 
-    :return:
+    :return: results: metric results (list of lists), both in validation and testing
+    
+    :return: raw_files: image filenames (list of str), only in testing mode
+    
+    :return: net_results: network predictions (list of arrays), only in testing mode
+    
+    :return: ground_truths: masks used as ground-truths (list of arrays), only in testing mode
+    
+    :return: names: image identifier extracted from the dataloader (list of str), only in testing mode
+    
+    
     """
     
     
@@ -354,9 +227,9 @@ def evaluate(net, loader, iteration, key):
                 
                     stopYIndex = min((i+1)*batch_gpu, Y.shape[0])
                 
-                if params.three_D: # Training in 2D with one channel
+                if params.three_D: # Full 2D+time volume (unused)
     
-                    x_part = X[startIndiex:stopXIndex,:,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
+                    x_part = X[startIndiex:stopXIndex,:,:,:,:].cuda(non_blocking=True) #create a mini-batch of samples that fits on the GPU
                     
                     if len(Y) != 0:
             
@@ -364,7 +237,7 @@ def evaluate(net, loader, iteration, key):
                 
                 else:
 
-                    x_part = X[startIndiex:stopXIndex,:,:,:].cuda(non_blocking=True) #create a mini-batchof samples that fits on the GPU
+                    x_part = X[startIndiex:stopXIndex,:,:,:].cuda(non_blocking=True) #create a mini-batch of samples that fits on the GPU
                     
                     if len(Y) != 0:
                     
@@ -373,13 +246,13 @@ def evaluate(net, loader, iteration, key):
                 
                 output = net(x_part).data #Run the samples though the network and get the predictions
                 
-                if key == 'test':
+                if key == 'test': # Only in testing mode
                     
-                    if not('Scale' in params.architecture):
+                    if not('Scale' in params.architecture): # Architectures that do not zoom in the vessel in a second iteration. These architectures output a probability map without argmax that needs to be binarized
                     
                         output = torch.argmax(output, 1).cuda()
                     
-                    if params.add3d == 0:
+                    if params.add3d == 0: # Full 2D+time architectures or full 2D architectures
 
                         net_results.append(output.cpu().numpy())
 
@@ -389,7 +262,7 @@ def evaluate(net, loader, iteration, key):
 
                             ground_truths.append(y_part.cpu().numpy())
                             
-                    else:
+                    else: # 2D+time models working with neighboring past and present frames
                         
                         net_results.append(output[:,:,:,params.add3d].cpu().numpy())
 
@@ -401,13 +274,13 @@ def evaluate(net, loader, iteration, key):
 
                     names.append(list(n)[0])
                     
-                else:
+                else: # Validation mode
                     
                     if not('Scale' in params.architecture):
                     
                         output = torch.argmax(output, 1).cuda() #returns the class with the highest probability and shrinks the tensor from (N, C(class probability), H, W) to (N, H, W)
                     
-                if len(Y) != 0:
+                if len(Y) != 0: # If ground-truths are available, compute metrics
                 
                     for j in range(x_part.shape[0]):
 
@@ -440,7 +313,7 @@ def evaluate(net, loader, iteration, key):
                                 exit()
         
         
-        if len(Y) != 0:
+        if len(Y) != 0: # If ground-truths are available, compute the mean and STD of all the images evaluated and append them to the results
                             
             if ('Dice' in metrics) or ('dice' in metrics) or ('DICE' in metrics):
 

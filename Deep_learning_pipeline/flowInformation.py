@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 
 from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 
+
 # Code to extract flow information from ROIs in MAT files
 
 # Compare results when I have segmentations from neural networks
@@ -32,29 +33,29 @@ from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 class FlowInfo:
     
     """
-    Extract or load flow information from MAT files or masks.
+    Extract or load flow information from MAT files or neural networks' masks.
     
     Params:
         
-        - study: study where files belong to
+        - study: study where files belong to (str: 'CKD1'/'CKD2'/'Hero'/'Extr')
         
-        - path: path of mask or MAT file for saving, path of TXT file for loading
+        - path: path of mask or MAT file for saving, path of TXT file for loading (str)
         
-        - dest_path: path of TXT file for saving, None for loading
+        - dest_path: path of TXT file for saving, None for loading (str, only used in 'load' mode)
         
-        - raw_file_path: path of raw file. Only for saving from mask information. Otherwise is None
+        - raw_file_path: path of raw file. Only for saving from mask information. Otherwise is None (str, only used in 'save' mode)
         
-        - flag: either 'save' for saving or 'load' for loading
+        - flag: either 'save' for saving or 'load' for loading (str, states if 'save' mode or 'load' mode)
         
-        - energy: in case of flow info loading, save the energy if available
+        - energy: in case of flow info loading, save the energy if available (bool, only in 'save' mode)
         
-        - load_file: TXT file to read in case of file loading 
+        - load_file: TXT file to read in case of file loading (str, only in 'load' mode)
     
     Returns:
         
-        - if flag is 'save', saves flow information as TXT in location specified
+        - if flag is 'save', saves flow information as TXT in location specified (dest_path)
         
-        - if flag is 'load', loads flow information from TXT and provides arrays
+        - if flag is 'load', loads flow information from TXT and provides arrays with flow information (used in test.py)
     
     """
     
@@ -124,11 +125,11 @@ class FlowInfo:
         Params:
             
             - inherited from class (check at the beginning of the class)
-            - file: TXT file
+            - file: TXT filename (str)
         
         Returns:
             
-            - flow parameters
+            - flow parameters in array (array)
         
         """
     
@@ -179,81 +180,64 @@ class FlowInfo:
     
 
     def flowFromMask(self, mask, raw, spacing):
-        
+
         """
         Compute flow parameters from masks and phase images.
-        
+
         Params:
-            
+
             - inherited from class (check at the beginning of the class)
-            - mask: binary or quasi-binary 3D array with results from neural network segmentation
-            - raw: corresponding phase image
-            - spacing: pixel size, useful to extract area and flow information
-        
+            - mask: binary or quasi-binary 3D array with results from neural network segmentation (array)
+            - raw: corresponding velocity array, extracted from phase images (array)
+            - spacing: pixel size, useful to extract area and flow information (list)
+
         Returns:
-            
+
             - result: 2D array with results on average velocity, standard deviation,
                     maximum velocity, minimum velocity, area, net flow, positive flow
-                    and negative flow
-        
+                    and negative flow (array)
+
         """
-        
-        # Multiply mask to raw phase image: get just ROI information
-        
-        mult = mask[0,:,:,:] * raw
-        
-        result = np.zeros((8, mask.shape[-1]))
-        
-        for j in range(mask.shape[-1]): # Frame by frame analysis
-            
-            mult_frame = mult[:,:,j] # Frame of the multiplication operator
-            
-            s = np.sum(mult_frame.flatten()) # Overall sum of each frame. If > 0 --> left kidney, if < 0 --> right kidney
-            
+
+        mult = mask * raw # Focus only where mask = 1
+
+        result = np.zeros((8, mask.shape[0]))
+
+        for j in range(mask.shape[0]): # Frame by frame analysis
+
+            mult_frame = mult[j,:,:] # Frame of the multiplication operator
+
+            s = np.sum(mult_frame.flatten()) # Overall sum of velocities for each frame in the segmented ROI
+
             ind = np.where(mult_frame != 0) # Indexes inside the ROI
             
-            result[0,j] = np.mean(mult_frame[ind].flatten()) # Mean values
-            
-            result[1,j] = np.std(mult_frame[ind].flatten()) # Standard deviation
-            
-            result[2,j] = np.amax(mult_frame) # Maximum value
-            
-            result[3,j] = np.amin(mult_frame) # Minimum value
-            
-            result[4,j] = (np.array(ind).shape[-1])*spacing[0]*spacing[1]/100 # Area
-    
-            result[5,j] = result[0,j]/result[4,j] # Net flow
-            
-            ind_pos = np.where(mult_frame > 0) # Positive voxel values
-                
-            ind_neg = np.where(mult_frame < 0) # Negative voxel values
-            
-            if s > 0:
-        
-                result[6,j] = np.mean(mult_frame[ind_pos].flatten())/(result[4,j]) # Positive flow values
-                
-                if len(ind_neg) != 0: # Check if there are any negative voxels
-                    
-                    result[7,j] = np.mean(mult_frame[ind_neg].flatten())/(result[4,j]) # Negative flow values
-                
-                else:
-                    
-                    result[7,j] = 0
-            
-            elif s < 0:
-                
-                result[6,j] = np.mean(mult_frame[ind_neg].flatten())/(result[4,j]) # Positive flow values
-                
-                if len(ind_pos) != 0: # Check if there are any positive voxels
-                    
-                    result[7,j] = np.mean(mult_frame[ind_pos].flatten())/(result[4,j]) # Negative flow values
-                
-                else:
-                    
-                    result[7,j] = 0
-                
-        return result
+            if len(mult_frame[ind]) != 0:
 
+                result[0,j] = np.mean(mult_frame[ind].flatten()) # Mean values (cm/s)
+
+                result[1,j] = np.std(mult_frame[ind].flatten()) # Standard deviation (cm/s)
+
+                result[2,j] = np.amax(np.abs(mult_frame[ind])) # Maximum value (cm/s)
+
+                result[3,j] = np.amin(np.abs(mult_frame[ind])) # Minimum value (cm/s)
+                
+                result[4,j] = (len(ind))*spacing[0]*spacing[1] # Area (cm2)
+                
+                aux = mult_frame[ind]
+                
+                pos = np.where(aux > 0) # Positive flow indexes
+                
+                neg = np.where(aux < 0) # Negative flow indexes
+                
+                result[6,j] = np.sum(aux[pos].flatten())*spacing[0]*spacing[1]/100 # Positive flow
+
+                result[7,j] = np.sum(aux[neg].flatten())*spacing[0]*spacing[1]/100 # Negative flow
+
+                result[5,j] = result[6,j] + result[7,j] # Net flow
+
+
+        return result
+    
 
 
     def mat_loader(self, filename):
@@ -265,13 +249,13 @@ class FlowInfo:
             
             - inherited from class (check at the beginning of the class)
             
-            - path and filename, inherited from the class
+            - filename: name of MAT file to load, including its path (str)
         
         Returns:
             
-            - mat: dictionary with .mat file fields
+            - mat: dictionary with .mat file fields (dictionary)
             
-            - st: structure field with data
+            - st: structure field with data (dictionary)
             
         """
         
@@ -296,9 +280,11 @@ class FlowInfo:
             
             - inherited from class (check at the beginning of the class)
             
-            - path: folder with MAT files of interest
+            - filename: MAT filename (str)
             
-            - filename: MAT filename
+        Returns:
+        
+            - array with flow information from the MAT file
         
         """
 
@@ -320,6 +306,8 @@ class FlowInfo:
             while cont_correct < (res.shape[0] - 1):
 
                 if st[0,0][53][0,0][7][0,j][cont].shape[1] == res.shape[1]:
+                    
+                    # Flow information is located in the 53rd field of the dictionary encoding this file
 
                     res[cont_correct,:] += np.reshape(st[0,0][53][0,0][7][0,j][cont], res[cont,:].shape)
                     
@@ -343,7 +331,7 @@ class FlowInfo:
                 
                 raw_files = os.listdir(self.raw_file_path)
                 
-                # Load phase images' information
+                # Load phase images' information. Look for corresponding phase image to the given VTK file mask
                 
                 raw_info = []
 
@@ -370,9 +358,7 @@ class FlowInfo:
                     for i in ind:
                         
                         raw, origin, spacing = self.readVTK(self.raw_file_path, raw_files[i])
-                
-                        ##       PERHAPS SOME SCALING PARAMETER NEEDS TO BE INTRODUCED!!!!
-#
+                                        
                         res = self.flowFromMask(mask, raw, spacing)
                 
                         # Save flow information as txt
@@ -391,35 +377,23 @@ class FlowInfo:
                         
                         res = self.flowFromMAT(mat_file)
                         
-                        if self.study == 'CKD2':
-
-                            #ind = mat_file.index('-')
+                        if self.study == 'CKD2': # CKD2 study
                             
                             ind_aux = mat_file.index('^')
-                            
-                            #times = 2
-                            
-                            #if '007' in mat_file or '011' in mat_file:
-                                
-                             #   times = 1
-                            
-                            #for time in range(times):
-                                
-                             #   rep = '_' + str(time)
 
                             filename_save = self.dest_path + self.study + '_' + mat_file[:ind_aux] + '_' + mat_file[ind_aux + 1: ind_aux + 5] + mat_file[-9:-4] + '_flowInfo.txt'
 
                             np.savetxt(filename_save, res)
                             
-                        elif self.study == 'Hero':
+                        elif self.study == 'Hero': # Heroic study
 
                             filename_save = self.dest_path + mat_file[:-4].replace('msk_','') + '_flowInfo.txt'
 
                             np.savetxt(filename_save, res)
                             
-                        elif self.study == 'Extr':
+                        elif self.study == 'Extr': # Extra study
                             
-                            if '20181213' in mat_file:
+                            if '20181213' in mat_file: # Same flow measurement for two different acquisitions in that patient ID
                                 
                                 times = 2
                                 
@@ -434,14 +408,13 @@ class FlowInfo:
                             elif 'dx' in mat_file or 'DX' in mat_file:
                      
                                 orient = 'dx'
-                        
-                            if '20190103' in mat_file:
+
                                 
-                                for time in range(times):
+                            for time in range(times):
 
-                                    filename_save = self.study + '_' + mat_file[:12] + '_' + orient + '_' + str(time) + '_flowInfo.txt'
+                                filename_save = self.study + '_' + mat_file[:12] + '_' + orient + '_' + str(time) + '_flowInfo.txt'
 
-                                    np.savetxt(self.dest_path + filename_save, res)
+                                np.savetxt(self.dest_path + filename_save, res)
                         
                         
         
@@ -449,19 +422,19 @@ class FlowInfo:
             
             # Load flow info from TXT files that have been previously saved
 
-            if self.energy:
+            if self.energy: # Load flow energy information if it is available
                 
-                mean_v, std_v, max_v, min_v, energy, area, net_flow, pos_flow, neg_flow = self.flowFromTXT() # Just an example!!
+                mean_v, std_v, max_v, min_v, energy, area, net_flow, pos_flow, neg_flow = self.flowFromTXT() 
                 
                 return mean_v, std_v, max_v, min_v, energy, area, net_flow, pos_flow, neg_flow
                 
-            else:
+            else: # Unavailable flow energy information, do not load it
                 
-                mean_v, std_v, max_v, min_v, area, net_flow, pos_flow, neg_flow = self.flowFromTXT() # Just an example!!
+                mean_v, std_v, max_v, min_v, area, net_flow, pos_flow, neg_flow = self.flowFromTXT() 
                 
                 return mean_v, std_v, max_v, min_v, area, net_flow, pos_flow, neg_flow
             
-            # DO FURTHER ACTION IN HERE
+            
  
 
 

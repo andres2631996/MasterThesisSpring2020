@@ -578,19 +578,21 @@ def resultPrint(losses, val_results):
     
     if val_results is not None: # If k > 1 and there has been a validation set, display metrics results
         
+        # Results for validation
+        
         for i in range(len(params.metrics)):
 
             mean_val = np.mean(val_results[:,0,i].flatten())
 
             std_val = np.std(val_results[:,0,i].flatten())
+            
+            # Metric print at the end of all folds
 
             print('Final {} over validation folds: {} +- {}\n'.format(params.metrics[i], mean_val, std_val))
 
-            # Show in figures cross-validation results, too
-
-            # Results for validation
-
             fig = plt.figure(figsize = (13,5))
+            
+            # Bar plot for all folds' results
 
             plt.bar(np.arange(1,K + 1), metrics_val_array[:,0,i], color = 'r', yerr = metrics_val_array[:,1,i])
 
@@ -599,6 +601,8 @@ def resultPrint(losses, val_results):
             plt.xlabel('Fold number')
 
             plt.ylabel(str(params.metrics[i]))
+            
+            # Save figure with network results in destination path
 
             fig.savefig(params.network_data_path + str(params.metrics[i]) + '_validation_plot_' + str(K) + '_folds_' + 'trainedWith' + params.train_with + '_' + params.prep_step + '.png')
 
@@ -618,9 +622,9 @@ data_path = params.network_data_path #output folder path
 
 K = params.k #K in K-fold cross validation
 
-r_paths, m_paths = extractVTKfilesStratification(patient_paths)
+r_paths, m_paths = extractVTKfilesStratification(patient_paths) # Get lists of images and masks paths to be used in the cross-validation process
 
-files_to_copy = ['params.py', 'crossValidation.py', 'datasets.py', 'train.py', 'evaluate.py']
+files_to_copy = ['params.py', 'crossValidation.py', 'datasets.py', 'train.py', 'evaluate.py'] # Copy files used in the process to network folder
 
 # Copies files to output path to help remembering the setup
 
@@ -647,9 +651,9 @@ losses = []
 
 losses_std = []
 
-metrics_train_array = np.zeros((params.k, 2, len(params.metrics)))
+#metrics_train_array = np.zeros((params.k, 2, len(params.metrics))) # Array to store metrics on training set (unused)
 
-metrics_val_array = np.zeros((params.k, 2, len(params.metrics)))
+metrics_val_array = np.zeros((params.k, 2, len(params.metrics))) # Array to store metrics on validation set
 
     
 
@@ -661,109 +665,102 @@ for k in range(K):
     
     print("Initializing network, fold " + str(k) + "...")
     
-    if params.architecture == "UNet_with_Residuals":
+    if params.architecture == "UNet_with_Residuals": # U-Net with residuals
         
         net = models.UNet_with_Residuals().cuda()
     
-    elif params.architecture == "UNet_with_ResidualsPretrained":
+    elif params.architecture == "UNet_with_ResidualsPretrained": # U-Net with residuals with pretrained ResNet18 as encoder
         
         net = UNet_with_ResidualsPretrained().cuda()
         
-    elif params.architecture == "NewUNet_with_Residuals":
+    elif params.architecture == "NewUNet_with_Residuals": # U-Net with residuals with no downsamplings nor upsamplings
         
         net = models.NewUNet_with_Residuals().cuda() 
         
-    elif params.architecture == "UNetRNN":
-        
-        net = models.UNetRNN().cuda()
-        
-    elif params.architecture == "UNet_with_ResidualsFourLayers":
+    elif params.architecture == "UNet_with_ResidualsFourLayers": # U-Net with residuals with 4 layers
         
         net = models.UNet_with_ResidualsFourLayers().cuda()
         
-    elif params.architecture == "AttentionUNet":
+    elif params.architecture == "AttentionUNet": # Attention U-Net
         
-            net = models.AttentionUNet().cuda()
+        net = models.AttentionUNet().cuda()
             
-    elif params.architecture == "NewAttentionUNet":
+    elif params.architecture == "NewAttentionUNet": # Attention U-Net with no downsamplings nor upsamplings
         
-            net = models.NewAttentionUNet().cuda()
+        net = models.NewAttentionUNet().cuda()
             
-    elif params.architecture == "TimeDistributedAttentionUNet":
+    elif params.architecture == "TimeDistributedAttentionUNet": # Attention U-Net with time-distributed layers, for 2D+time processing
         
         net = models.TimeDistributedAttentionUNet().cuda()
         
-    elif params.architecture == "TimeDistributedUNet":
+    elif params.architecture == "TimeDistributedUNet": # U-Net with time-distributed layers
         
         net = models.TimeDistributedUNet().cuda()
         
-    elif params.architecture == "Hourglass":
+    elif params.architecture == "Hourglass": # U-Net with time-distributed layers and some time cell in the encoder-decoder connections
         
         net = models.Hourglass().cuda()
         
-    elif params.architecture == "NestedUNet2d":
+    elif params.architecture == "NestedUNet2d": # Nested U-Net for 2D images (unused)
         
         net = models.NestedUNet2d().cuda()
         
-    elif params.architecture == "NestedUNet2dTime":
+    elif params.architecture == "NestedUNet2dTime": # Nested U-Net with time-distributed layers for 2D+time images (unused)
         
         net = models.NestedUNet2dTime().cuda()
         
-    elif params.architecture == "NestedUNet2dAutocontext":
+    elif params.architecture == "NestedUNet2dAutocontext": # Nested U-Net for 2D images with output re-introduction (unused)
         
         net = models.NestedUNet2dAutocontext().cuda()
         
-    elif params.architecture == "NestedUNet2dTimeAutocontext":
+    elif params.architecture == "NestedUNet2dTimeAutocontext": # Nested U-Net for 2D+time images and time-distributed layers with output re-introduction (unused)
         
         net = models.NestedUNet2dTimeAutocontext().cuda()
         
-    elif params.architecture == "NestedUNet2dScale":
+    elif params.architecture == "NestedUNet2dScale": # Nested U-Net for 2D images with 2 iterations: 1st iteration for artery location --> zooming to the zone with the artery --> 2nd final iteration in finer scale (unused)
         
         net = models.NestedUNet2dScale().cuda()
         
-    elif params.architecture == "AttentionUNetScale":
+    elif params.architecture == "AttentionUNetScale": # Attention U-Net for 2D images with 2 iterations: 1st iteration for artery location --> zooming to the zone with the artery --> 2nd final iteration in finer scale (unused)
         
         net = models.AttentionUNetScale().cuda()
         
-    elif params.architecture == "AttentionUNetAutocontext":
+    elif params.architecture == "AttentionUNetAutocontext": # Attention U-Net with output re-introduction for 2D images (OPTIMAL ARCHITECTURE FOUND)
         
         net = models.AttentionUNetAutocontext().cuda()
         
-    elif params.architecture == "AttentionUNetMemory":
+    elif params.architecture == "AttentionUNetMemory": # Attention U-Net with output re-introduction for 2D images, in 3 iterations. The last iteration re-introduces the outputs of the 2 previous iterations ("memory") (unused)
         
         net = models.AttentionUNetMemory().cuda()
         
-    elif params.architecture == "NestedUNet2dMemory":
+    elif params.architecture == "NestedUNet2dMemory": # Nested U-Net with output re-introduction for 2D images, in 3 iterations. The last iteration re-introduces the outputs of the 2 previous iterations ("memory") (unused)
         
-        net = models.NestedUNet2dMemory().cuda()
+        net = models.NestedUNet2dMemory().cuda() 
         
-    elif params.architecture == "NestedUNet2dTimeScale":
+    elif params.architecture == "NestedUNet2dTimeScale": # Nested U-Net for 2D+time images with 2 iterations: 1st iteration for artery location --> zooming to the zone with the artery --> 2nd final iteration in finer scale (unused)
         
         net = models.NestedUNet2dTimeScale().cuda()
         
-    elif params.architecture == "NestedUNet2dTimeMemory":
+    elif params.architecture == "NestedUNet2dTimeMemory": # Nested U-Net for 2D+time images with output re-introduction for 2D images, in 3 iterations. The last iteration re-introduces the outputs of the 2 previous iterations ("memory") (unused) 
         
         net = models.NestedUNet2dTimeMemory().cuda()
         
-    elif params.architecture == "TimeDistributedAttentionUNetAutocontext":
+    elif params.architecture == "TimeDistributedAttentionUNetAutocontext": # Attention U-Net with output re-introduction for 2D+time images, in 3 iterations. The last iteration re-introduces the outputs of the 2 previous iterations (unused)
         
         net = models.TimeDistributedAttentionUNetAutocontext().cuda()
         
-    elif params.architecture == "TimeDistributedUNetAutocontext":
+    elif params.architecture == "TimeDistributedUNetAutocontext": # 2D+time U-Net with time-distributed layers and result re-introduction
         
         net = models.TimeDistributedUNetAutocontext().cuda()
 
-    elif params.architecture == "TimeDistributedUNetMemory":
+    elif params.architecture == "TimeDistributedUNetMemory": # 2D+time U-Net with time-distributed layers and result re-introduction
 
         net = models.TimeDistributedUNetMemory().cuda()
 
-    elif params.architecture == "TimeDistributedUNetScale":
+    elif params.architecture == "TimeDistributedUNetScale": # U-Net for 2D+time images with 2 iterations: 1st iteration for artery location --> zooming to the zone with the artery --> 2nd final iteration in finer scale (unused)
 
         net = models.TimeDistributedUNetScale().cuda()
         
-    elif params.architecture == "kUNetGRU":
-
-        net = models.kUNetGRU().cuda()
         
         # MORE MODELS TO COME!!!        
 
@@ -773,7 +770,7 @@ for k in range(K):
         print("Error: Architecture " + params.architecture + " not found.")
     
     
-    print(net)
+    print(net) # Net structure printing
         
     utilities.print_num_params(net)
     
@@ -785,20 +782,19 @@ for k in range(K):
         net.apply(weights_init)
         
     
-    if params.k > 1:
+    if params.k > 1: # Get training and validation paths when k > 1
     
         train_raw_path, train_mask_path, val_raw_path, val_mask_path, train_patients, val_patients = pathExtractorCrossValidation(k, m_paths, r_paths, patient_paths)
     
-            
-    # Training and validation data loaders
+
     
-    if params.k > 1:
+    if params.k > 1: # Training and validation data loaders
 
         loader_train, loader_val = get_data_loader(train_raw_path, train_mask_path, k, K, 
                                                     data_path, val_raw_path, val_mask_path, 
                                                     train_patients, val_patients)
         
-    else:
+    else: # Just the training dataloader, the validation dataloader is an empty list
         
         loader_train, loader_val = get_data_loader(r_paths, m_paths, k, params.k, data_path,[],[],[],[])
     
@@ -810,13 +806,13 @@ for k in range(K):
     loss, loss_std, metrics_val, model_state, optimizer, optimizer_state = train.train(net, loader_train, loader_val, k)
     
     
-    # Save model and optimizer for later inference
+    # Save model and optimizer at last iteration for later inference
     
     utilities.model_saving(model_state, optimizer_state, params.network_data_path, 'FinalTrainedWith' + params.train_with + '_' + params.prep_step + 'fold_' + str(k) + '.tar')
     
-    losses.append(loss)
+    losses.append(loss) # List saving the losses of all iterations of each fold
     
-    losses_std.append(loss_std)
+    losses_std.append(loss_std) # List saving the standard deviation of the losses
     
     if metrics_val is not None:
     

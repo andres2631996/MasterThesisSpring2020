@@ -605,6 +605,37 @@ class testing:
         http://nedbatchelder.com/blog/200712/human_sorting.html
         
         '''
+def atoi(self, text):
+
+        """
+
+        Function helping to sort a list of strings with numbers inside
+        
+        Params:
+        
+            - inherited by class (see description at the beginning of the class)
+            
+            - text: str, usually with some number inside, to be sorted (str)
+            
+        Outputs:
+        
+            - number inside str as int
+
+        """
+
+        return int(text) if text.isdigit() else text
+    
+    
+
+    def natural_keys(self, text):
+
+        '''
+        alist.sort(key=natural_keys) sorts in human order
+        http://nedbatchelder.com/blog/200712/human_sorting.html
+        
+        '''
+
+        return [ self.atoi(c) for c in re.split(r'(\d+)', text) ]
 
         return [ self.atoi(c) for c in re.split(r'(\d+)', text) ]
 

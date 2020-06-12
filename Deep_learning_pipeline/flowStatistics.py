@@ -22,7 +22,7 @@ import statsmodels.api as sm
 
 
 
-# Code to deal with statistics in data post-processing
+# Code to deal with flow statistics in data post-processing. Used after inference in test.py
 
 def t_test(result, reference):
     
@@ -31,11 +31,12 @@ def t_test(result, reference):
     network and the reference results from Segment.
     
     Params:
-        - result: 1D array with flow results from neural network segmentation
-        - reference: 1D array with reference flow results from software Segment
+        - result: 1D array with flow results from neural network segmentation (array)
+        - reference: 1D array with reference flow results from software Segment or software QFLOW (array)
     
     Returns:
-        - t_statistic and p_value
+        - t_statistic: t statistic score (float) 
+        - p_value: t test p-value (float)
     
     """
     
@@ -75,11 +76,12 @@ def wilcoxon_test(result, reference):
     from the neural network and the reference results from Segment.
     
     Params:
-        - result: 1D array with flow results from neural network segmentation
-        - reference: 1D array with reference flow results from software Segment
+        - result: 1D array with flow results from neural network segmentation (array)
+        - reference: 1D array with reference flow results from software Segment or software QFLOW (array)
     
     Returns:
-        - sum and p_value
+        - sum: squared sum of differences of Wilcoxon test (float)
+        - p_value: p value of Wilcoxon test (float)
     
     """
     
@@ -116,11 +118,15 @@ def figure_saving(dest_path, filename, figure):
     
     Params:
         
-        - dest_path: destination folder
+        - dest_path: destination folder (path)
         
-        - filename: given filename (must be .png)
+        - filename: given filename (must be .png) (str)
         
-        - figure: given figure from Matplotlib
+        - figure: given figure from Matplotlib (Matplotlib figure)
+        
+    Returns:
+    
+        - saved figure with a given filename in a given destination folder
     
     """
     
@@ -152,7 +158,7 @@ def figure_saving(dest_path, filename, figure):
                 
                 inp = input('File already exists. Do you want to overwrite or rename or abort? [o/r/a]:')
                 
-                if (inp == 'o') or (inp == 'O'):
+                if (inp == 'o') or (inp == 'O'): # Overwrite figure
                     
                     figure.savefig(dest_path + filename)
                 
@@ -160,7 +166,7 @@ def figure_saving(dest_path, filename, figure):
                     
                     cont = 0 # Filename counter
                     
-                    while (filename in files):
+                    while (filename in files): # Rewrite figure
                         
                         filename = filename[:-4] + '_' + str(cont) + '.png'
                         
@@ -194,19 +200,23 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
     """
     Compute a scatter plot with points and with linear regression equation
     given the flow results from the neural network and the reference results 
-    from Segment.
+    from Segment or QFLOW software.
     
     Params:
-        - result: 1D array with flow results from neural network segmentation
-        - reference: 1D array with reference flow results from software Segment
-        - plotting: flag to state whether the user wants to get a plot of the result or not (default True)
-        - save: flag indicating whether to save linear regression plot as .png file or not (default False)
-        - dest_path: folder where to save the linear regression plot if save is True (default current folder)
-        - filename: file name of regression plot (PNG file) (default: 'regression_plot.png')
+        - result: 1D array with flow results from neural network segmentation (array)
+        - reference: 1D array with reference flow results from software Segment (array)
+        - plotting: flag to state whether the user wants to get a plot of the result or not (bool, default True)
+        - save: flag indicating whether to save linear regression plot as .png file or not (bool, default False)
+        - dest_path: folder where to save the linear regression plot if save is True (str, default current folder)
+        - filename: file name of regression plot (PNG file) (str, default: 'regression_plot.png')
     
     Returns:
-        - linear regression plot and linear regression parameters
-        - Return also squared error and R2
+        - linear regression plot and linear regression parameters saved
+        - List with linear regression coefficients [fitting slope, fitting intercept] (list of 2 floats)
+        - Mean squared error between results and linear regression predictions (float)
+        - R2 correlation (float)
+        - distribution: list with the following structure [mean result, std result, mean reference, std reference] (list of 4 floats)
+        
     
     """
     
@@ -221,6 +231,8 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
             print('Result: {} +- {}\n'.format(np.mean(result), np.std(result)))
             
             print('Reference: {} +- {}\n'.format(np.mean(reference), np.std(reference)))
+            
+            distribution = [np.mean(result), np.std(result), np.mean(reference), np.std(reference)]
     
             # Create linear regression object
             
@@ -252,13 +264,6 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
             
             print('Coefficient of determination: {}\n'.format(r2_score(result, pred)))
 
-            # get CIs
-            
-            #sd = np.std(pred)
-            
-            #n = pred.shape[0]
-            
-            #ci = 1.96*sd/np.mean(pred)
             
             if plotting:
                 
@@ -274,32 +279,28 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
                 
                 plt.plot(reference, reference, color='gray', linewidth = 1, label = 'Ideal line')
                 
-                # 95% Confidence Intervals
-                
-                #plt.fill_between(reference, pred-ci, pred+ci, color = 'blue', alpha = 0.2)
-                
                 
                 if 'test' in filename:
                     
-                    plt.title('Test set', fontsize = 16)
+                    plt.title('Test set')
                     
                 elif 'all' in filename:
                     
-                    plt.title('Cross-validation set', fontsize = 16)
+                    plt.title('Validation set')
                     
                 elif 'ckd1' in filename:
                     
-                    plt.title('CKD1 set', fontsize = 16)
+                    plt.title('A1 set')
                     
                 else:
                 
                     plt.title('Linear regression plot')
                 
-                plt.xlabel('Reference values (ml/s)', fontsize = 18)
+                plt.xlabel('Reference values (ml/s)')
                 
-                plt.ylabel('Computed values (ml/s)', fontsize = 18)
+                plt.ylabel('Computed values (ml/s)')
                 
-                plt.legend(fontsize = 14)
+                plt.legend()
                 
                 plt.show()
                 
@@ -307,7 +308,7 @@ def linear_regression_test(result, reference, plotting = True, save = False, des
                     
                     figure_saving(dest_path, filename, fig)
                     
-            return [regr.coef_[0], regr.intercept_], mean_squared_error(result, pred), r2_score(result, pred)
+            return [regr.coef_[0], regr.intercept_], mean_squared_error(result, pred), r2_score(result, pred), distribution
             
         else:
             
@@ -327,11 +328,11 @@ def bland_altman_plot(result, reference, save = False, dest_path = os.getcwd() +
     and the reference results from Segment.
     
     Params:
-        - result: 1D array with flow results from neural network segmentation
-        - reference: 1D array with reference flow results from software Segment
-        - save: flag indicating whether to save linear regression plot as .png file or not (default False)
-        - dest_path: folder where to save the linear regression plot if save is True (default current folder)
-        - filename: file name of regression plot (PNG file) (default bland_altman_plot.png)   
+        - result: 1D array with flow results from neural network segmentation (array)
+        - reference: 1D array with reference flow results from software Segment (array)
+        - save: flag indicating whether to save linear regression plot as .png file or not (bool, default False)
+        - dest_path: folder where to save the linear regression plot if save is True (str, default current folder)
+        - filename: file name of regression plot (PNG file) (str, default bland_altman_plot.png)   
         
     
     
@@ -355,11 +356,11 @@ def bland_altman_plot(result, reference, save = False, dest_path = os.getcwd() +
 
             elif 'all' in filename:
 
-                plt.title('Cross-validation set')
+                plt.title('Validation set')
 
             elif 'ckd1' in filename:
 
-                plt.title('CKD1 set')
+                plt.title('A1 set')
 
             else:
             
@@ -391,13 +392,13 @@ def correlation(result, reference):
     
     Params:
     
-        - result: network result
+        - result: network result (array)
         
-        - reference: ground-truth
+        - reference: ground-truth (array)
         
     Returns:
     
-        - r: Pearson correlation coefficient
+        - r: Pearson correlation coefficient (float)
 
     """
     

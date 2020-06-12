@@ -36,19 +36,19 @@ import os
 class QFlowDataset(data.Dataset):
 
     """
-    Dataset for QFlow segmentation. 
+    Dataset for QFlow/2D PC-MRI images. 
     
     Params:
         
-        - img_paths: raw data files 
+        - img_paths: raw data files (list of str)
         
-        - mask_paths: ground truth files
+        - mask_paths: ground truth files (list of str)
         
         - train: if the dataset is used for training (True) or for validation or
-                 testing (False)
+                 testing (False) (bool)
         
         - augmentation: if True, augment the data with some transformations,
-        else return original dataset
+        else return original dataset (bool)
     
     """
 
@@ -64,7 +64,7 @@ class QFlowDataset(data.Dataset):
         self.augmentation = augmentation
         
 #        
-    def __len__(self):
+    def __len__(self): # Define length of dataset: as many image paths as we input
         
         if params.k > 1 or params.test:
         
@@ -119,21 +119,27 @@ class QFlowDataset(data.Dataset):
     def sumTime(self, path):
 
         """
-        Provide sum of image along time as extra channel for 2D cases, and also MIP
+        Provide sum of image along time and MIP along time as extra channel for 2D cases
         
         Params:
+        
+            - inherited by class (see description in the beginning)
             
-            - path: path of corresponding magnitude or phase file to analyze
+            - path: path of corresponding magnitude or phase file to analyze (str)
         
         Returns:
             
-            - sum_t: array with sum_t image array (2D array)
+            - sum_t: array with sum image array (2D array)
+            
+            - mip: array with MIP along time (2D array)
 
         """
         
         frame_ind = path.index('frame') 
         
         if not(params.multi_view) or (not('coronal' in path) and not('sagittal' in path)):
+            
+            # In 2D cases, sums along time and MIPs along time were saved as extra VTK files, just access them
 
             sum_path = path[:frame_ind] + 'sum.vtk' # Sum time image path
 
@@ -142,13 +148,13 @@ class QFlowDataset(data.Dataset):
             
         else:
             
-            if 'coronal' in path:
+            if 'coronal' in path: # Multi-view case (unused)
                 
                 sum_path = path[:frame_ind] + 'coronal_sum.vtk'
                 
                 mip_path = path[:frame_ind] + 'coronal_mip.vtk'
                 
-            elif 'sagittal' in path:
+            elif 'sagittal' in path: # Multi-view case (unused)
                 
                 sum_path = path[:frame_ind] + 'sagittal_sum.vtk'
                 
@@ -170,13 +176,13 @@ class QFlowDataset(data.Dataset):
         
         Params:
         
-            - path: path of central slice
+            - path: path of central slice (str)
             
-            - central_array: 2D central array
+            - central_array: 2D central array (2D array)
             
         Returns:
         
-            - final_array: output 2D+time array with past and future neighbors
+            - final_array: output 2D+time array with past and future neighbors (3D array)
         
         """
         
@@ -259,11 +265,15 @@ class QFlowDataset(data.Dataset):
         """
         Extracts the corresponding 'OTH' image in case we want to train with 'OTH' images as extra channels
         
+        OTH is a third modality apart from magnitude and phase that is found on QFLOW images from Philips and Siemens vendors
+        
+        (OTH comes "other")
+        
         (if '_oth' in params.train_with)
         
         """
    
-        # Get primary images with which the training is being done
+        # Get primary images with which the training is being done (magnitude + oth, phase + oth, or magnitude + phase + oth)
     
         splitting = params.train_with.split('_')
         
@@ -290,8 +300,10 @@ class QFlowDataset(data.Dataset):
         if os.path.exists(oth_path): # Existing modality (Philips, Siemens)
              
             oth_array, origin, spacing = self.readVTK(oth_path)
+            
             ind = np.where(oth_array == oth_array[0,0,0])
-            oth_array[ind] = -1
+            
+            oth_array[ind] = -1 # Set all background values of OTH to -1
 
             if not(params.three_D):
 
@@ -301,15 +313,15 @@ class QFlowDataset(data.Dataset):
                 
                 if not('mip' in oth_path):
 
-                    oth_array = self.addNeighbors(oth_path, oth_array)
+                    oth_array = self.addNeighbors(oth_path, oth_array) # Provide a 2D+time array with OTH modality with past and future frames
                     
-                else:
+                else: # Repeat MIP channel along time in 2D+time cases
                     
                     aux = np.repeat(oth_array, params.add3d*2+1, -1)
                     
                     oth_array = np.reshape(aux, (oth_array.shape[0], oth_array.shape[1], params.add3d*2+1))
                 
-        else: # Non-existing modality (GE)
+        else: # Non-existing OTH modality (GE images)
             
             #oth_array = np.zeros(raw_array.shape) + 0.5
             oth_array = np.ones(raw_array.shape)
@@ -321,7 +333,7 @@ class QFlowDataset(data.Dataset):
     def __getitem__(self, index):
 
         
-        # Check that the files read coincide
+        # Check that the image and mask files that are read coincide
         
         coincide = 1 # Coincidence flag
         
@@ -343,25 +355,24 @@ class QFlowDataset(data.Dataset):
                 
                 mask_path = self.mask_paths[0][index]
         
-            # Make sure that raw and mask files are coincident
         
             if mask_path.replace('msk', 'pha') == raw_path or mask_path.replace('msk', 'mag') == raw_path or mask_path.replace('msk', 'magBF') == raw_path:
                 
                 coincide = 1
                 
-                mask_array, _, _ = self.readVTK(mask_path)
+                mask_array, _, _ = self.readVTK(mask_path) # Files coincide, read mask
                 
-                if not(params.three_D):
+                if not(params.three_D): # In case of 2D models
                     
                     mask_array = mask_array[:,:,0]
                     
-                    if params.add3d > 0:
+                    if params.add3d > 0: # In case of 2D+time models built from 2D images with past and future neighbors
                         
                         mask_array = self.addNeighbors(mask_path, mask_array) # Surround central slice with past and future neighbors
             
             else:
                 
-                coincide = 0
+                coincide = 0 # Non-correspondent images and ground-truths
                 
                 print('Raw files and ground truths are not correspondent\n')
                 
@@ -372,7 +383,7 @@ class QFlowDataset(data.Dataset):
             
             # Compute number of channels
         
-            if params.three_D or (not params.three_D and not(params.sum_work)):
+            if params.three_D or (not params.three_D and not(params.sum_work)): # No extra priors are used in 2D, or 2D+time is used
                 
                 if 'both' in params.train_with:
                 
@@ -384,7 +395,7 @@ class QFlowDataset(data.Dataset):
 
             
             
-            else:
+            else: # 2D case with extra prior information (sum, MIP along time)
                 
                 if 'both' in params.train_with:
                 
@@ -394,12 +405,12 @@ class QFlowDataset(data.Dataset):
                     
                     channels = 3 # Magnitude/phase + sum of all magnitudes/phases in time + MIP of magnitude/phase along time
                 
-            #if '_oth' in params.train_with:
+            if '_oth' in params.train_with:
 
-             #   channels += 1 # Channels before + 'oth' modality
+                channels += 1 # Existing channels + 'oth' modality
                 
  
-            raw,_,_ = self.readVTK(raw_path)
+            raw,_,_ = self.readVTK(raw_path) # Read image
     
             if not(params.three_D):
             
@@ -416,38 +427,38 @@ class QFlowDataset(data.Dataset):
                 
                 img = np.zeros((raw.shape[0], raw.shape[1], channels))
             
-            elif params.three_D and params.add3d == 0:
+            elif params.three_D and params.add3d == 0: # Full 2D+time volumes (unused)
             
                 img = np.zeros((raw.shape[0], raw.shape[1], raw.shape[2],channels))
             
-            elif not(params.three_D) and params.add3d > 0:
+            elif not(params.three_D) and params.add3d > 0: # 2D+time volumes with neighboring past and future frames
                 
                 img = np.zeros((raw.shape[0], raw.shape[1], params.add3d*2 + 1,channels))
                 
                 
                 
             
-            if not('both' in params.train_with):
+            if not('both' in params.train_with): # Images only contain magnitude or phase information
                 
-                if params.three_D or (not(params.three_D) and params.add3d > 0):
+                if params.three_D or (not(params.three_D) and params.add3d > 0): # 2D+time case
                 
-                    img[:,:,:,0] = raw
+                    img[:,:,:,0] = raw  # First channel: magnitude/phase
                 
-                else:
+                else: # 2D case
                     
-                    img[:,:,0] = raw
+                    img[:,:,0] = raw # First channel: magnitude/phase
                     
                     if params.sum_work: # Work with extra channel with sum of time frames
                     
                         sum_t, mip = self.sumTime(raw_path)
 
-                        img[:,:,1] = sum_t
+                        img[:,:,1] = sum_t # Second channel: sum along time
                         
-                        img[:,:,2] = mip
+                        img[:,:,2] = mip # Third channel: MIP along time
             
-            else:
+            else: # Training with both magnitude and phase images
                 
-                if 'BF' in params.train_with:
+                if 'BF' in params.train_with: # Training with bias-field corrected magnitude images (bias field = BF)
                 
                     pha_path = raw_path.replace('magBF', 'pha')
                     
@@ -456,63 +467,63 @@ class QFlowDataset(data.Dataset):
                     pha_path = raw_path.replace('mag', 'pha')
     
                 
-                pha_array,_,_ = self.readVTK(pha_path)
+                pha_array,_,_ = self.readVTK(pha_path) # Read phase image
             
-                if params.add3d > 0:
+                if params.add3d > 0: 
                     
                     pha_array = self.addNeighbors(pha_path, pha_array[:,:,0]) # Surround central slice with past and future neighbors
                     
                 
-                if params.three_D or (not(params.three_D) and params.add3d > 0):
+                if params.three_D or (not(params.three_D) and params.add3d > 0): # 2D+time case
                 
-                    img[:,:,:,0] = raw
+                    img[:,:,:,0] = raw # First channel: magnitude image
                     
-                    img[:,:,:,1] = pha_array
+                    img[:,:,:,1] = pha_array # Second channel: phase image
                 
                 
-                else:
+                else: # 2D case
     
-                    img[:,:,0] = raw
+                    img[:,:,0] = raw # First channel: magnitude image
 
-                    if params.sum_work: # Work with extra channel with sum of time frames
+                    if params.sum_work: # Work with extra channels with sums and MIPs of time frames
                     
-                        img[:,:,1], img[:,:,2] = self.sumTime(raw_path)
+                        img[:,:,1], img[:,:,2] = self.sumTime(raw_path) # Second channel: sum along time magnitude // Third channel: MIP along time magnitude
                         
-                        img[:,:,3] = pha_array[:,:,0]
+                        img[:,:,3] = pha_array[:,:,0] # Fourth channel: phase image
 
-                        img[:,:,4], img[:,:,5] = self.sumTime(pha_path)
+                        img[:,:,4], img[:,:,5] = self.sumTime(pha_path) # Fifth channel: sum along time phase // Sixth channel: MIP along time phase
                         
-                        img[:,:,6] = img[:,:,0]*img[:,:,3]
+                        img[:,:,6] = img[:,:,0]*img[:,:,3] # Seventh channel: magnitude * phase
                         
-                    else:
+                    else: # Work only with magnitude and phase
                         
-                        img[:,:,1] = pha_array[:,:,0]
+                        img[:,:,1] = pha_array[:,:,0] # Second channel: phase image
                         
                     
-            if '_oth' in params.train_with: # Incorporate extra modality as last channel
+            if '_oth' in params.train_with: # Incorporate extra modality OTH as last channel
     
                 oth_array = self.othExtractor(raw_path, raw)
 
                 if not(params.three_D) and params.add3d == 0:
 
-                    img[:,:,0] *= oth_array
+                    #img[:,:,0] *= oth_array 
                     
-                    #img[:,:,-1] = oth_array 
+                    img[:,:,-1] = oth_array 
 
                 else:
 
-                    img[:,:,:,0] *= oth_array
+                    #img[:,:,:,0] *= oth_array
                     
-                    #img[:,:,:,-1] = oth_array
+                    img[:,:,:,-1] = oth_array
                     
             
-            if self.train and self.augmentation:
+            if self.train and self.augmentation: # Perform augmentation of the training set
                 
-                augm_chance = random.uniform(0,1)
+                augm_chance = random.uniform(0,1) # Overall augmentation probability
                 
-                if augm_chance < params.augm_probs[0]:
+                if augm_chance < params.augm_probs[0]: # Perform augmentation
     
-                    #if params.three_D or (not(params.three_D) and params.add3d > 0):
+                    #if params.three_D or (not(params.three_D) and params.add3d > 0): # (3D augmentation --> UNUSED)
                         
                      #   img = np.expand_dims(img, axis = 0)
                     
@@ -532,24 +543,24 @@ class QFlowDataset(data.Dataset):
                     
                     #else:
                     
-                        if params.three_D or (not(params.three_D) and params.add3d > 0):
+                        if params.three_D or (not(params.three_D) and params.add3d > 0): # To augment a 2D+time image as 2D, move all frames in all channels to the channels dimension
                             
                             img = img.reshape((img.shape[0], img.shape[1], img.shape[-2]*img.shape[-1]))
 
-                        augm2D = augmentation2D.Augmentations2D(img, mask_array)
+                        augm2D = augmentation2D.Augmentations2D(img, mask_array) # Augmentation in Albumentations
 
                         img, mask_array = augm2D.__main__()
                         
-                        if params.three_D or (not(params.three_D) and params.add3d > 0):
+                        if params.three_D or (not(params.three_D) and params.add3d > 0): # In case of 2D+time images, move the time frames again to an extra dimension
                             
                             img = img.reshape((img.shape[0], img.shape[1], img.shape[-1]//channels, channels))
 
         
-            X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float()
+            X = Variable(torch.from_numpy(np.flip(img,axis = 0).copy())).float() # Convert model input to PyTorch tensor and flip it
             
             if len(self.mask_paths) != 0:
 
-                Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long()
+                Y = Variable(torch.from_numpy(np.flip(mask_array,axis = 0).copy())).long() # Convert model ground-truth into PyTorch tensor to flip it
             
             else:
                 

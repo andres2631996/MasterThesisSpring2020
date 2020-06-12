@@ -321,7 +321,7 @@ class StratKFold:
         
         Params:
             
-            - k: number of groups to divide patients into
+            - k: number of groups to divide patients into (comes from self)
             
             - patients: all patient names
             
